@@ -21,6 +21,19 @@ Trae CreditMonitor · Trae 积分余额监控
   TRAE_TOKEN_CACHE         缓存文件路径（可选，默认 /ql/data/config/ 或脚本同目录）
   TRAE_SAVE_DIR            账号 JSON 所在目录（可选，用于回写轮换后的 refreshToken）
 
+🔑 如何获取 refreshToken（新手必看，两步搞定）
+  方式一：一键提取（推荐 · 免抓包）
+    1) 在本机打开 Trae 客户端并登录你的账号（确保已产生登录凭据）
+    2) 运行本仓库的提取脚本：python trae_get_token.py
+    3) 终端会打印一行：TRAE_REFRESH_TOKEN = xxxxxx
+    4) 复制等号后面的 xxxxxx，粘贴到青龙面板「环境变量」→ 新建变量里
+    多账号：在客户端依次登录每个账号，各跑一次提取脚本，得到 _2 / _3 ... 的值
+  方式二：手动定位（懂原理的可选）
+    Trae 客户端把登录凭据加密存放在（Windows 路径）：
+      %APPDATA%/Trae CN/User/globalStorage/storage.json
+    其中键名 iCubeAuthInfo://icube.cloudide 对应的值即加密凭据，
+    解密算法已内置在 trae_get_token.py 中，直接跑脚本即可自动解密。
+
 🚀 使用方法（青龙面板）
   1. 脚本放入 /ql/data/scripts/，环境变量填好 TRAE_REFRESH_TOKEN_* 与 WECHAT_WEBHOOK
   2. 定时任务：python /ql/data/scripts/trae_credit_monitor.py   定时 0 * * * *

@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=social)](https://github.com/L0NE-6/Trae-AutoCheckin)
 
-[✨ 特性](#-特性) · [🚀 快速开始](#-快速开始) · [⚙️ 配置](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题)
+[✨ 特性](#-特性) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 配置](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题)
 
 </div>
 
@@ -40,6 +40,51 @@
 - 🔁 **失败重试** — 遇限流自动退避重试，网络抖动不影响任务
 - 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
 - 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
+
+---
+
+## 🔑 获取 refreshToken（新手必看）
+
+> 这是**唯一**需要你手动准备的东西，弄到它就大功告成。
+
+### ✅ 方式一：一键提取（推荐 · 免抓包）
+
+本仓库自带 `trae_get_token.py`，会自动从 Trae 客户端读取并解密登录凭据，**零依赖、不联网、不上传**。
+
+```bash
+# 1. 先在电脑上打开 Trae 客户端并登录你的账号
+# 2. 运行提取脚本
+python trae_get_token.py
+
+# 3. 终端会打印出（直接复制等号后面的那串）：
+#    TRAE_REFRESH_TOKEN = AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCD=.0000000000000000
+```
+
+复制到青龙面板 **环境变量** → 新建变量：
+
+| 变量名 | 值 |
+| :--- | :--- |
+| `TRAE_REFRESH_TOKEN` | 粘贴上面复制的那串 |
+
+**多账号**：在客户端依次登录每个账号，各运行一次 `trae_get_token.py`，
+把得到的值分别填到 `TRAE_REFRESH_TOKEN`、`TRAE_REFRESH_TOKEN_2`、`TRAE_REFRESH_TOKEN_3` …
+
+### 🔍 方式二：手动定位（了解原理可选）
+
+Trae 客户端把登录凭据加密后存在（Windows）：
+
+```text
+%APPDATA%/Trae CN/User/globalStorage/storage.json
+```
+
+其中键名 `iCubeAuthInfo://icube.cloudide` 的值就是加密凭据。
+解密算法（AES-128-CBC + SHA-512 校验）已内置在 `trae_get_token.py` 里，
+所以**直接跑脚本即可**，不用自己动手解密。
+
+### ⚠️ 注意事项
+
+- 提取前请确保 **Trae 客户端已登录**，否则读不到凭据。
+- 一个账号只在一处刷新（要么青龙，要么其它工具），**别同时挂两处**，否则 token 会互相顶失效。
 
 ---
 
@@ -134,8 +179,15 @@ python trae_credit_monitor.py    # 查积分
 <details>
 <summary><b>怎么获取 refreshToken？</b></summary>
 
-从 Trae 客户端的登录凭据中提取（通常是账号 JSON 里的 `auth.refreshToken` 字段）。
-本仓库不提供获取工具，请自行通过抓包 / 客户端存储获取。
+**推荐用本仓库自带的一键提取工具**：先在电脑上登录 Trae 客户端，然后运行
+
+```bash
+python trae_get_token.py
+```
+
+终端会直接打印出 `TRAE_REFRESH_TOKEN = xxx`，复制到青龙环境变量即可。
+该脚本会自动定位并解密客户端凭据，免抓包、零依赖。
+详见 [🔑 获取 refreshToken](#-获取-refreshtoken新手必看)。
 </details>
 
 <details>
@@ -166,6 +218,7 @@ python trae_credit_monitor.py    # 查积分
 Trae-AutoCheckin/
 ├── trae_auto_checkin.py        # 🎯 每日自动签到
 ├── trae_credit_monitor.py      # 📊 积分只读监控
+├── trae_get_token.py           # 🔑 refreshToken 一键提取（免抓包）
 ├── .github/workflows/          # ⚙️ GitHub Actions 定时任务
 ├── LICENSE                     # 📄 MIT
 └── README.md                   # 📖 本文件
