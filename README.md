@@ -18,12 +18,14 @@
 
 ## 📖 简介
 
-**Trae AutoCheckin** 是一套用于 Trae 的积分自动化工具，包含两个独立脚本：
+**Trae AutoCheckin** 是一套用于 Trae 的积分自动化工具，包含 4 个独立脚本：
 
 | 脚本 | 作用 |
 | :--- | :--- |
 | `trae_auto_checkin.py` | 🎯 每日自动签到，领取签到积分 |
 | `trae_credit_monitor.py` | 📊 只读查询积分「已用 / 剩余」，绝不签到 |
+| `trae_sms_login.py` | 📲 手机号 + 短信验证码登录，直接换取 Token（免客户端） |
+| `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken（免抓包） |
 
 纯 **Python 标准库**实现，**无需 pip 安装任何依赖**，可直接丢进青龙面板 / 本地 / GitHub Actions 运行。
 
@@ -39,6 +41,7 @@
 - 📱 **稳定设备号** — 按账号生成固定 16 位设备号，避免随机设备号异常
 - 🔁 **失败重试** — 遇限流自动退避重试，网络抖动不影响任务
 - 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
+- 📲 **短信登录** — 无需客户端，手机号 + 验证码直接换 Token
 - 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
 
 ---
@@ -80,6 +83,32 @@ Trae 客户端把登录凭据加密后存在（Windows）：
 其中键名 `iCubeAuthInfo://icube.cloudide` 的值就是加密凭据。
 解密算法（AES-128-CBC + SHA-512 校验）已内置在 `trae_get_token.py` 里，
 所以**直接跑脚本即可**，不用自己动手解密。
+
+### 📲 方式三：短信验证码登录（无需客户端）
+
+不想装 Trae 客户端？用本仓库自带的 `trae_sms_login.py`，
+直接「手机号 + 短信验证码」走网页端真实登录流程换 Token，**零依赖**。
+
+```bash
+# 交互式（按提示输入手机号 → 收到的验证码）
+python trae_sms_login.py
+
+# 非交互 / 脚本调用
+python trae_sms_login.py -p 138xxxxxxxx -c 123456
+
+# 离线自检（不联网，仅验证混淆与编码）
+python trae_sms_login.py --selftest
+```
+
+运行后会打印 `accessToken` / `refreshToken`，并保存到 `trae_sms_accounts.json`，
+把其中的 `refreshToken` 填到环境变量即可。
+
+> ⚠️ **风控提示**：字节风控会对**机房 / 代理 / VPN IP** 强制弹滑块（错误码 `1105`）。
+> 请在**家庭宽带 / 手机热点**等真实网络下运行；脚本无法自动过滑块。
+> 若确实被要求滑块，可在真实浏览器过一次，把返回的 `verify_ticket`、`fp`
+> 用 `--ticket` / `--fp` 传入继续登录。
+
+---
 
 ### ⚠️ 注意事项
 
@@ -133,6 +162,8 @@ python trae_credit_monitor.py    # 查积分
 | `TRAE_TOKEN_CACHE` | ➖ | 缓存文件路径，默认 `/ql/data/config/` 或脚本同目录 |
 | `TRAE_SAVE_DIR` | ➖ | 账号 JSON 目录，用于回写轮换后的 refreshToken |
 | `JOB_INDEX` | ➖ | 指定签到的账号下标，如 `3` 或 `1,2,3`；留空则自动轮签 |
+| `TRAE_PHONE` | ➖ | 仅 `trae_sms_login.py`：手机号（免交互） |
+| `TRAE_SMS_CODE` | ➖ | 仅 `trae_sms_login.py`：短信验证码（免交互） |
 
 ---
 
@@ -218,6 +249,7 @@ python trae_get_token.py
 Trae-AutoCheckin/
 ├── trae_auto_checkin.py        # 🎯 每日自动签到
 ├── trae_credit_monitor.py      # 📊 积分只读监控
+├── trae_sms_login.py           # 📲 短信验证码登录换 Token
 ├── trae_get_token.py           # 🔑 refreshToken 一键提取（免抓包）
 ├── .github/workflows/          # ⚙️ GitHub Actions 定时任务
 ├── LICENSE                     # 📄 MIT
