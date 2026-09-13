@@ -149,6 +149,37 @@ python trae_sms_login.py --selftest
 
 ---
 
+### 🧩 `trae_checkin.py` 用的环境变量和其它脚本不一样
+
+| 变量 | 用途 |
+| :--- | :--- |
+| `TRAE_ACCOUNTS` | JSON 数组，多账号首选。元素：`accessToken` / `refreshToken` / `uid` / `name` |
+| `TRAE_ONLY` | 只跑指定账号：序号(从 1 起) / `uid` / `name`，便于拆分定时任务错峰 |
+| `CLAIM_TRIES` | 单账号每轮 claim 次数，默认 **1**（抗限流关键，别调大） |
+| `QYWX_TOKEN` | 企业微信群机器人 key（`?key=` 后面那段） |
+| `PLUSPLUS_TOKEN` | PushPlus token |
+| `TRAE_ACCOUNT_DIR` | 可选：凭据 json 所在目录，续期后回写 |
+
+> 旧脚本 `trae_auto_checkin.py` / `trae_credit_monitor.py` 用的是
+> `TRAE_REFRESH_TOKEN*` 和 `WECHAT_WEBHOOK`，**两套命名不要混用**。
+
+### 🤖 关于仓库自带的 GitHub Actions
+
+`checkin.yml` 和 `credit-monitor.yml` 每小时跑一次，但调用的是**旧脚本**，
+并且需要在仓库 Settings → Secrets 里配置 `TRAE_REFRESH_TOKEN`、`TRAE_REFRESH_TOKEN_2..5`、
+`WECHAT_WEBHOOK`，**不配就会一直失败**。
+
+⚠️ 如果你已经在用青龙跑，请**禁用这两个工作流**：Actions 与青龙同时用同一个账号签到，
+会互相抢限流额度（9074 按时间窗口计），表现为「时好时坏」。二者只留一个。
+
+### 📦 依赖
+
+- 用 `accessToken` / `refreshToken` 配置账号（推荐，含青龙）：**零依赖**，纯标准库
+- 需要直接解密桌面端 `storage.json` / `icubeAuth` 时：`pip install cryptography`
+
+
+---
+
 ## 🚀 快速开始
 
 ### 方式一：青龙面板（推荐）
