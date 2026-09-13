@@ -1,90 +1,48 @@
+<div align="center">
+
 # 🤖 Trae AutoCheckin
 
-Trae 每日积分签到，一个脚本搞定：多账号、自动续期、抗 9074 限流、企业微信推送。
+**Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信推送**
 
-> 主脚本是 **`trae_checkin.py`**（青龙 / 本地均可，纯标准库零依赖）。
-> 另附三个独立小工具：短信登录、refreshToken 一键提取、积分只读监控。
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-success)](.)
+[![Platform](https://img.shields.io/badge/platform-青龙%20%7C%20本地%20%7C%20Actions-blue)](.)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=social)](https://github.com/L0NE-6/Trae-AutoCheckin)
 
----
+[✨ 特性](#-特性) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 配置](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题)
 
-## 🚦 为什么签到老是返回「9074 参与用户太多」
-
-`9074` **不是账号没资格**，而是服务端按**时间窗口**做的排队限流。实测踩过的三个坑：
-
-| 坑 | 说明 | 解法 |
-| :--- | :--- | :--- |
-| 走代理 | 系统代理 / Clash 让多账号共用同一个出口 IP，最容易触发限流 | 强制直连 `ProxyHandler({})` |
-| 双重设备头 | 同时发 `x-device-id` 和 `X-Device-Id`，会被风控判定为异常客户端 | 只发一个小写头 |
-| 当场连发重试 | 失败就 sleep 再打，反而**不断延长**自己的惩罚窗口 | 每账号每轮只发 **1 次**，失败交给下一轮 cron |
-
-> 实测：同一批账号，用「当场重试 3~6 次」连续十几轮全部 9074；
-> 改成「静默几小时后单次请求 + 账号间隔 25 秒」，一次性全部签到成功。
-> 脚本还内置**熔断**：任一账号命中 9074 就收工，避免把剩余账号一起拖进惩罚窗口。
-
-推荐让青龙**高频轻量**地跑，而不是一次跑到底：
-
-```cron
-*/30 * * * * trae_checkin.py
-```
-
-配合当日状态文件 `.trae_checkin_state.json`，已签成功的账号后续运行**零请求**，
-全天多轮下来每个账号都能排到。
+</div>
 
 ---
 
-## 🔁 refreshToken 会轮换，务必缓存
+## 📖 简介
 
-Trae 每次续期都会下发**新的** `refreshToken`。青龙里的环境变量是静态的，
-如果不缓存新值，第二三次就会拿旧 token 去续期而彻底失效。
-`trae_checkin.py` 会把续期结果写进同目录 `.trae_token_cache.json`，并在下次运行时优先使用它。
+**Trae AutoCheckin** 是一套用于 Trae 的积分自动化工具，包含 4 个独立脚本：
 
-⚠️ **该文件含真实凭据，已列入 `.gitignore`，切勿提交或分享。**
-⚠️ 青龙容器如果每次重建会丢缓存，请把缓存里的最新值贴回环境变量。
+| 脚本 | 作用 |
+| :--- | :--- |
+| `trae_checkin.py` | 🎯 多账号每日签到，抗 9074 限流，自动续期 + 推送 |
+| `trae_credit_monitor.py` | 📊 只读查询积分「已用 / 剩余」，绝不签到 |
+| `trae_sms_login.py` | 📲 手机号 + 短信验证码登录，直接换取 Token（免客户端） |
+| `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken（免抓包） |
+
+纯 **Python 标准库**实现，**无需 pip 安装任何依赖**，可直接丢进青龙面板 / 本地 / GitHub Actions 运行。
 
 ---
 
-## 🧩 trae_checkin.py
+## ✨ 特性
 
-### 环境变量
-
-| 变量 | 必填 | 说明 |
-| :--- | :---: | :--- |
-| `TRAE_REFRESH_TOKEN` | ✅ 二选一 | 账号 1 的 refreshToken（最简单写法） |
-| `TRAE_REFRESH_TOKEN_2~_9` | ➖ | 账号 2~9 的 refreshToken |
-| `TRAE_ACCOUNTS` | ✅ 二选一 | JSON 数组，适合想显式指定 uid / name 的场景 |
-| `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
-| `CLAIM_TRIES` | ➖ | 单账号每轮 claim 次数，默认 **1**（抗限流关键，别调大） |
-| `QYWX_TOKEN` | ➖ | 企业微信群机器人 key（`?key=` 后面那段） |
-| `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
-| `TRAE_ACCOUNT_DIR` | ➖ | 凭据 json 所在目录，续期后回写 |
-
-> 兼容旧部署：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
-> 不需要 accessToken —— 脚本会用 refreshToken 自动续期换取，
-> **不需要 cryptography**（只有直接解密桌面端 storage.json 才需要）。
-
-### 青龙面板
-
-```bash
-# 1. 把 trae_checkin.py 放入青龙 scripts 目录
-# 2. 环境变量里添加：
-#      TRAE_REFRESH_TOKEN  = 你的 refreshToken
-#      TRAE_REFRESH_TOKEN_2 = 第 2 个账号（多账号时）
-#      QYWX_TOKEN          = 企业微信机器人 key（可选）
-# 3. 定时任务（建议高频轻量）：
-python /ql/data/scripts/trae_checkin.py     # 定时: */30 * * * *
-```
-
-### 本地运行
-
-```bash
-export TRAE_REFRESH_TOKEN="你的 refreshToken"
-python trae_checkin.py
-```
-
-### 📦 依赖
-
-- 用 `refreshToken` / `accessToken` 配置账号（推荐，含青龙）：**零依赖**，纯标准库
-- 需要直接解密桌面端 `storage.json` / `icubeAuth` 时：`pip install cryptography`
+- 🪶 **零依赖** — 只用 Python 标准库，开箱即用
+- 🛡️ **抗 9074 限流** — 强制直连 + 每账号单次尝试 + 熔断收工，不硬打
+- 🔐 **Token 缓存** — 复用未过期的 `accessToken`，失效才续期，减少请求
+- ⛓️ **链式续期** — 自动处理 `refreshToken` 轮换并回写，长期不失效
+- 👥 **多账号** — 支持任意数量账号，环境变量即可配置
+- 📅 **当日跳过** — 已签成功的账号后续运行零请求，不白烧限流额度
+- 📱 **稳定设备号** — 按账号生成固定 16 位设备号，跨运行不漂移
+- 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
+- 📲 **短信登录** — 无需客户端，手机号 + 验证码直接换 Token
+- 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
 
 ---
 
@@ -157,6 +115,146 @@ python trae_sms_login.py --selftest
 - 提取前请确保 **Trae 客户端已登录**，否则读不到凭据。
 - 一个账号只在一处刷新（要么青龙，要么其它工具），**别同时挂两处**，否则 token 会互相顶失效。
 
+---
+
+## 🚀 快速开始
+
+### 方式一：青龙面板（推荐）
+
+```bash
+# 1. 把两个脚本放入青龙 scripts 目录
+/ql/data/scripts/trae_checkin.py
+/ql/data/scripts/trae_credit_monitor.py
+
+# 2. 在「环境变量」里添加 TRAE_REFRESH_TOKEN_* 和 QYWX_TOKEN
+
+# 3. 新建定时任务（建议高频轻量，不硬打）
+python /ql/data/scripts/trae_checkin.py          # 定时: */30 * * * *
+python /ql/data/scripts/trae_credit_monitor.py   # 定时: 0 * * * *
+```
+
+### 方式二：本地运行
+
+```bash
+export TRAE_REFRESH_TOKEN="你的 refreshToken"
+export TRAE_REFRESH_TOKEN_2="第 2 个账号的 refreshToken"   # 可选
+export QYWX_TOKEN="你的企业微信机器人 key"  # 可选
+
+python trae_checkin.py          # 签到
+python trae_credit_monitor.py   # 查积分
+```
+
+---
+
+## ⚙️ 环境变量
+
+| 变量 | 必填 | 说明 |
+| :--- | :---: | :--- |
+| `TRAE_REFRESH_TOKEN` | ✅ | 第 1 个账号的 refreshToken |
+| `TRAE_REFRESH_TOKEN_2~_9` | ➖ | 第 2~9 个账号的 refreshToken |
+| `TRAE_DEVICE_ID[_N]` | ➖ | 设备号，留空自动按账号生成固定值 |
+| `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
+| `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（抗限流，别调大） |
+| `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
+| `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
+| `TRAE_PHONE` | ➖ | 仅 `trae_sms_login.py`：手机号（免交互） |
+| `TRAE_SMS_CODE` | ➖ | 仅 `trae_sms_login.py`：短信验证码（免交互） |
+
+> 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
+
+---
+
+## 🎛️ 运行模式
+
+| 模式 | 配置 | 行为 |
+| :--- | :--- | :--- |
+| **全量签到**（默认） | 不设 `TRAE_ONLY` | 逐个签到所有账号（命中限流会熔断跳过） |
+| **指定账号** | `TRAE_ONLY=3` | 只跑第 3 个账号，其余跳过 |
+| **按 uid 筛选** | `TRAE_ONLY=113185...` | 只跑匹配 uid 的账号 |
+| **重试多次** | `CLAIM_TRIES=2` | 单账号限流后当场再试（一般不需要） |
+
+> 💡 配合青龙定时 `*/30 * * * *`，加上当日状态文件自动跳过已签账号，
+> 限流的账号会在后续轮次自动补签，全天下来每个账号都能签上。
+
+---
+
+## 🧠 工作原理
+
+```text
+        ┌──────────────────────────────────────────────────┐
+        │  读取 token 缓存（.trae_token_cache.json）        │
+        │  已签到账号 → 跳过（当日状态文件）                 │
+        └───────────────────────┬──────────────────────────┘
+                                │
+              ┌─────────────────┴─────────────────┐
+              ▼                                   ▼
+      ✅ 有效期内 / 校验通过               ❌ 过期或未认证(code=1001)
+              │                                   │
+              ▼                                   ▼
+       直接复用（不刷新）              用 refreshToken 续期
+              │                                   │
+              ▼                                   ▼
+       查今日是否已签 ──────┬────── 获取新 token + refreshToken
+                           │                    │
+                ┌──────────┴──────────┐         │
+                ▼                     ▼         ▼
+         checked_in=true      checked_in=false   写回缓存（链式回写）
+              │                     │
+              ▼                     ▼
+         ☑️ 今日已签到          发送 claim（每账号仅 1 次）
+                                   │
+                          ┌────────┴────────┐
+                          ▼                 ▼
+                     code=0 成功       code=9074 限流
+                          │                 │
+                          ▼                 ▼
+                    🎉 签到成功       ⏭ 熔断收工，等下一轮
+```
+
+> 💡 **关于 refreshToken**
+> Trae 的 `refreshToken` 是**轮换链**：每次续期都会产生一个新值，旧值随即失效。
+> 因此本脚本会把最新值**回写到缓存与账号文件**，避免链停在旧节点导致 401。
+> ⚠️ 请勿在多处同时使用同一账号刷新，否则会互相使对方 token 失效。
+
+---
+
+## ❓ 常见问题
+
+<details>
+<summary><b>怎么获取 refreshToken？</b></summary>
+
+**推荐用本仓库自带的一键提取工具**：先在电脑上登录 Trae 客户端，然后运行
+
+```bash
+python trae_get_token.py
+```
+
+终端会直接打印出 `TRAE_REFRESH_TOKEN = xxx`，复制到青龙环境变量即可。
+该脚本会自动定位并解密客户端凭据，免抓包、零依赖。
+详见 [🔑 获取 refreshToken](#-获取-refreshtoken新手必看)。
+</details>
+
+<details>
+<summary><b>提示「凭证续期失败 / 401」怎么办？</b></summary>
+
+说明该账号的 refreshToken 链已被推进到失效节点，需要**重新登录 Trae 客户端并导出新的 refreshToken**。
+</details>
+
+<details>
+<summary><b>会不会被限流？</b></summary>
+
+Trae 的签到接口有**按时间窗口**的排队限流，高峰期更容易触发。
+本脚本的做法：每账号每轮只发 1 次 claim，命中限流立刻熔断收工，
+配合青龙定时高频轻量跑，加上当日状态文件自动跳过已签账号，
+全天多轮下来每个账号都能排到。**不要**把 `CLAIM_TRIES` 调大硬打，那样只会更糟。
+</details>
+
+<details>
+<summary><b>为什么有两个脚本？</b></summary>
+
+`trae_checkin.py` 负责签到（主脚本），`trae_credit_monitor.py` 负责只读查询积分。
+两者共用同一份 token 缓存，互不干扰。
+</details>
 
 ---
 
@@ -164,12 +262,12 @@ python trae_sms_login.py --selftest
 
 ```text
 Trae-AutoCheckin/
-├── trae_checkin.py        # 🎯 多账号签到（主脚本，抗 9074 限流）
-├── trae_credit_monitor.py # 📊 积分只读监控（可选，不签到）
-├── trae_sms_login.py      # 📲 短信验证码登录换 Token
-├── trae_get_token.py      # 🔑 refreshToken 一键提取（免抓包）
-├── LICENSE                # 📄 MIT
-└── README.md              # 📖 本文件
+├── trae_checkin.py             # 🎯 多账号签到（主脚本，抗 9074 限流）
+├── trae_credit_monitor.py      # 📊 积分只读监控
+├── trae_sms_login.py           # 📲 短信验证码登录换 Token
+├── trae_get_token.py           # 🔑 refreshToken 一键提取（免抓包）
+├── LICENSE                     # 📄 MIT
+└── README.md                   # 📖 本文件
 ```
 
 ---
