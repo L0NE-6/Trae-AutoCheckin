@@ -69,7 +69,9 @@ import sys
 import urllib.request
 import urllib.error
 from datetime import datetime
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+# cryptography 仅解密桌面端 storage.json(icubeAuth) 时才需要；
+# 用 accessToken / refreshToken 的常规部署（含青龙）完全不需要，
+# 因此改为惰性导入，保证那种场景下真正零依赖、不会 ImportError。
 
 # ---------- tc 解密常量 ----------
 SALT_A = bytes([82,9,106,213,48,54,165,56,191,64,163,158,129,243,215,251,
@@ -230,6 +232,12 @@ def _derive_key_iv(random_bytes: bytes, enc_type: str):
 
 
 def decrypt_storage_value(base64_value: str) -> str:
+    try:
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    except ImportError:
+        raise SystemExit("❌ 解密 icubeAuth/storage.json 需要 cryptography，"
+                         "请 pip install cryptography；"
+                         "或改用 accessToken/refreshToken 方式配置账号（零依赖）")
     buf = base64.b64decode(base64_value)
     header = buf[0:6]
     random_bytes = buf[6:38]
@@ -573,7 +581,7 @@ def checkin_claim(auth: dict):
 def process_account(auth: dict) -> dict:
     name = auth.get("_name") or auth.get("uid") or "(未知)"
     result = {"name": name, "uid": auth.get("uid", "-"), "icon": "✅",
-              "status": "失败", "credits": "-", "detail": ""}
+              "status": "失败", "credits": "-", "detail": "", "_claimed": False}
 
     if not auth.get("accessToken"):
         if auth.get("refreshToken"):
@@ -612,17 +620,32 @@ def process_account(auth: dict) -> dict:
         result["detail"] = f"今日已签，积分余额 {result['credits']:,.2f}" if pts is not None else f"今日已签，积分 {credits}"
         print(f"☑️  [结果] 今日已签到")
         return result
-    # 如果 enable=False 且 code=0 才是真正的未开放；否则继续尝试 claim
-    is_auth_fail = raw_text and ('"code":1001' in raw_text.replace(" ", "") or '"code": 1001' in raw_text)
-    if enable is False and not is_auth_fail:
-        # 可能是 enable=false 但 token 有效，仍尝试 claim（服务端有时 enable 不准）
-        print(f"⚠️  [状态] enable=False，仍尝试 claim ...")
-    if is_auth_fail:
-        result["icon"] = "❌"; result["status"] = "鉴权失败"
-        result["detail"] = "token 无效且刷新失败，请重新登录"
-        print(f"❌ [结果] 鉴权失败")
+    # 状态查询拿到的是鉴权失败（刷新后仍 1001）→ 硬失败，绝不浪费 claim 请求
+    rt = (raw_text or "").replace(" ", "")
+    if '"code":1001' in rt:
+        result["icon"] = "🔑"; result["status"] = "鉴权失败"
+        result["detail"] = "token 无效且自动续期失败，需重新登录取新 refreshToken"
+        print(f"❌ [结果] 鉴权失败（硬失败）")
         return result
 
+    # 状态查询本身不通（HTTP 异常 / 非 JSON）→ 先不发 claim，等下一轮
+    if checked_in is None:
+        result["icon"] = "⏳"; result["status"] = "待重试"
+        result["detail"] = f"状态查询未成功，本轮不发起 claim：{(raw_text or '')[:70]}"
+        print(f"⏳ [结果] 状态不可用，跳过 claim")
+        return result
+
+    # 服务端明确 enable=false 且鉴权正常 → 该账号确实没开放签到，
+    # 继续发 claim 只会白烧限流额度并拖累其它账号，直接判定未开放。
+    if enable is False:
+        result["icon"] = "🚫"; result["status"] = "未开放"
+        result["detail"] = "该账号未开放签到（enable=false），不再重复请求"
+        print(f"🚫 [结果] 未开放签到")
+        mark_done(str(auth.get("uid") or auth.get("_name") or ""),
+                  {"status": "未开放", "credits": "-", "at": now_text()})
+        return result
+
+    result["_claimed"] = True          # 只有真正发过 claim 才需要账号间错峰
     claim_ok, claim_code, claim_msg = checkin_claim(auth)
     # 以 claim 业务 code 为准，避免积分未变导致误判
     if claim_ok:
@@ -646,7 +669,7 @@ def process_account(auth: dict) -> dict:
     elif claim_code == 9074:
         result["icon"] = "⏳"; result["status"] = "待重试"
         result["detail"] = "参与用户太多(9074)，本轮未签成，下轮 cron 自动补签"
-        print(f"❌ [结果] {result['detail']}")
+        print(f"⏳ [结果] {result['detail']}")
     else:
         result["icon"] = "❌"; result["status"] = "失败"
         result["detail"] = f"code={claim_code}: {claim_msg}"
@@ -718,32 +741,48 @@ def main() -> None:
         print("✅ 全部账号今日均已完成，无需请求接口")
 
     import random as _rand
+    import time as _t
+    prev_claimed = False
     for idx, acc in enumerate(pending):
-        if idx > 0:
-            # 账号间随机延时，降低被限流(9074)概率
+        # 只有上一次真的发过 claim 才需要错峰；纯只读的 status 查询不必等待，
+        # 否则"全部已签到"的巡检也要白等一分多钟。
+        if idx > 0 and prev_claimed:
             gap = _rand.randint(12, 25)   # 实测 25s 间隔可让相邻账号连续签到成功
             print(f"\n⏳ [间隔] 等待 {gap} 秒后处理下一个账号...")
-            import time as _t
             _t.sleep(gap)
         try:
             r = process_account(acc)
+            if r["status"] == "待重试":
+                # 命中限流说明当前出口 IP 已在惩罚窗口内，
+                # 继续打后面的账号只会一起失败并延长窗口 —— 直接收工等下一轮。
+                results.append(r)
+                rest = len(pending) - idx - 1
+                if rest > 0:
+                    print(f"⏭  [熔断] 命中限流，跳过剩余 {rest} 个账号，等下一轮 cron")
+                break
             if r["status"] in ("签到成功", "已签到"):
                 mark_done(str(acc.get("uid") or acc.get("_name") or ""),
                           {"status": r["status"], "credits": r.get("credits"),
                            "at": now_text()})
+            prev_claimed = bool(r.get("_claimed"))
             results.append(r)
         except Exception as e:
+            prev_claimed = False
             results.append({"name": acc.get("_name", "?"), "uid": acc.get("uid", "-"),
                             "icon": "❌", "status": "异常", "credits": "-", "detail": str(e)})
 
+    SOFT = ("待重试",)          # 限流类，下一轮 cron 会自动补签，不算失败
+    DEAD = ("未开放", "鉴权失败")  # 需要人工处理
     ok_n = sum(1 for r in results if r["status"] == "签到成功")
     already_n = sum(1 for r in results if r["status"] == "已签到")
-    fail_n = len(results) - ok_n - already_n
+    soft_n = sum(1 for r in results if r["status"] in SOFT)
+    dead_n = sum(1 for r in results if r["status"] in DEAD)
+    fail_n = len(results) - ok_n - already_n - soft_n - dead_n
 
     print()
     print("╔" + "═" * 52 + "╗")
     print(f"║ 🏁 Trae SOLO 签到完成                        ║")
-    print(f"║ ✅ 成功: {ok_n:<3} ☑️ 已签: {already_n:<3} ❌ 失败: {fail_n:<3}        ║")
+    print(f"║ ✅ 成功 {ok_n:<3} ☑️ 已签 {already_n:<3} ⏳ 待重试 {soft_n:<3} ❌ 失败 {fail_n + dead_n:<3}      ║")
     print(f"║ 🕒 结束时间: {now_text():<34}║")
     print("╚" + "═" * 52 + "╝")
 
@@ -751,7 +790,7 @@ def main() -> None:
         f"🤖 Trae SOLO 多账号签到\n"
         f"━━━━━━━━━━━━━━\n"
         f"🕒 时间：{now_text()}\n"
-        f"✅ 成功 {ok_n}  ☑️ 已签 {already_n}  ❌ 失败 {fail_n}\n"
+        f"✅ 成功 {ok_n}  ☑️ 已签 {already_n}  ⏳ 待重试 {soft_n}  ❌ 失败 {fail_n + dead_n}\n"
         f"━━━━━━━━━━━━━━\n"
     )
     for r in results:
