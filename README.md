@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-success)](.)
-[![Platform](https://img.shields.io/badge/platform-青龙%20%7C%20本地%20%7C%20Actions-blue)](.)
+[![Platform](https://img.shields.io/badge/platform-青龙%20%7C%20本地%20%7C%20任意定时-blue)](.)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=social)](https://github.com/L0NE-6/Trae-AutoCheckin)
 
@@ -27,7 +27,7 @@
 | `trae_sms_login.py` | 📲 手机号 + 短信验证码登录，直接换取 Token（免客户端） |
 | `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken（免抓包） |
 
-纯 **Python 标准库**实现，**无需 pip 安装任何依赖**，可直接丢进青龙面板 / 本地 / GitHub Actions 运行。
+纯 **Python 标准库**实现，**无需 pip 安装任何依赖**，可直接丢进青龙面板 / 本地 crontab / 任意定时任务运行。
 
 ---
 
@@ -266,6 +266,7 @@ Trae-AutoCheckin/
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 📲 短信验证码登录换 Token
 ├── trae_get_token.py           # 🔑 refreshToken 一键提取（免抓包）
+├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
 ├── LICENSE                     # 📄 MIT
 └── README.md                   # 📖 本文件
 ```
