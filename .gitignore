@@ -1,4 +1,31 @@
-__pycache__/
-*.pyc
+# ---- 运行时生成的凭据 / 状态：含真实 token，绝不提交 ----
+.trae_token_cache.json
 trae_token_cache.json
+.trae_checkin_state.json
+trae_checkin_state.json
 .trae_device_ids.json
+trae_device_ids.json
+.trae_token.json
+trae_token.json
+trae_sms_accounts.json
+storage.json
+*accounts*.json
+
+# ---- 密钥 / 环境变量 ----
+.env
+.env.*
+*.pem
+*.key
+*.jks
+*.p12
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---- 杂项 ----
+*.log
+*.bak
+.DS_Store
