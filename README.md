@@ -163,6 +163,22 @@ python trae_sms_login.py --selftest
 > 旧脚本 `trae_auto_checkin.py` / `trae_credit_monitor.py` 用的是
 > `TRAE_REFRESH_TOKEN*` 和 `WECHAT_WEBHOOK`，**两套命名不要混用**。
 
+**兼容旧部署：只给 refreshToken 也能跑**
+
+```cron
+# 青龙环境变量（与旧脚本 trae_auto_checkin.py 相同命名）
+TRAE_REFRESH_TOKEN   = AbC....=0000000000000000      # 账号 1
+TRAE_REFRESH_TOKEN_2 = ...                          # 账号 2（最多 _9）
+WECHAT_WEBHOOK       = ...                          # 新脚本也认这个名字
+```
+
+不需要 accessToken，也不需要 cryptography —— 脚本会自动续期换取，
+并把**轮换后的新 refreshToken** 写进同目录 `.trae_token_cache.json`，
+下次运行优先用缓存，避免拿旧值续期而彻底失效。
+（因此青龙目录必须可持久化；若容器每次重建，请把缓存内容贴回环境变量。）
+
+---
+
 ### 🤖 关于仓库自带的 GitHub Actions
 
 `checkin.yml` 和 `credit-monitor.yml` 每小时跑一次，但调用的是**旧脚本**，
