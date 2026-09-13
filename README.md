@@ -152,7 +152,14 @@ python trae_credit_monitor.py   # 查积分
 | :--- | :---: | :--- |
 | `TRAE_REFRESH_TOKEN` | ✅ | 第 1 个账号的 refreshToken |
 | `TRAE_REFRESH_TOKEN_2~_9` | ➖ | 第 2~9 个账号的 refreshToken |
+| `TRAE_ACCOUNTS` | ➖ | 多账号 JSON 数组（更灵活）：每号可给 `accessToken` / `refreshToken` / `icubeAuth` / `storagePath` |
+| `TRAE_ACCESS_TOKEN[_N]` | ➖ | 已有 accessToken 时直接给，省一次续期 |
+| `TRAE_ICUBE_AUTH` | ➖ | 桌面端加密凭据串，脚本自动解密（需 cryptography） |
+| `TRAE_STORAGE_PATH` | ➖ | 直接指向客户端 `storage.json`，自动解密取 token |
+| `TRAE_UID[_N]` | ➖ | 账号标识，仅用于日志与缓存键 |
 | `TRAE_DEVICE_ID[_N]` | ➖ | 设备号，留空自动按账号生成固定值 |
+| `TRAE_TOKEN_CACHE` | ➖ | token 缓存路径，默认 `/ql/data/config/` 或脚本同目录 |
+| `TRAE_ACCOUNT_DIR` | ➖ | 回写轮换后 refreshToken 的账号 JSON 目录 |
 | `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（抗限流，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
