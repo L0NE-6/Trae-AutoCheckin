@@ -109,7 +109,8 @@ EP_EXCHANGE  = OAuthHost + "/cloudide/api/v3/trae/oauth/ExchangeToken"
 
 # ---------- 推送配置 ----------
 PLUSPLUS_TOKEN = os.getenv("PLUSPLUS_TOKEN", "")
-QYWX_TOKEN     = os.getenv("QYWX_TOKEN", "")
+# 兼容旧脚本命名：WECHAT_WEBHOOK 与 QYWX_TOKEN 都可
+QYWX_TOKEN     = os.getenv("QYWX_TOKEN") or os.getenv("WECHAT_WEBHOOK") or ""
 
 # 设备号持久化文件
 DEVICE_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".trae_device_ids.json")
@@ -138,12 +139,25 @@ def save_token_cache(cache: dict) -> None:
         pass
 
 
+def _acct_key(acc: dict) -> str:
+    """账号唯一键：uid > _name > name。用于 token 缓存与当日状态，绝不能撞键，
+    否则多账号会互相覆盖（曾导致 refreshToken-only 模式 5 个账号共用空键）。"""
+    return (str(acc.get("uid") or "").strip()
+            or str(acc.get("_name") or "").strip()
+            or str(acc.get("name") or "").strip()
+            or "default")
+
+
+def _cache_key(acc: dict) -> str:
+    return _acct_key(acc)
+
+
 def cache_tokens(acc: dict) -> None:
-    uid = str(acc.get("uid") or "").strip()
-    if not (uid and acc.get("accessToken")):
+    key = _cache_key(acc)
+    if not (key and acc.get("accessToken")):
         return
     cache = load_token_cache()
-    cache[uid] = {"accessToken": acc["accessToken"],
+    cache[key] = {"accessToken": acc["accessToken"],
                   "refreshToken": acc.get("refreshToken", ""),
                   "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     save_token_cache(cache)
@@ -156,7 +170,7 @@ def apply_token_cache(accounts: list) -> list:
         return accounts
     hit = 0
     for a in accounts:
-        rec = cache.get(str(a.get("uid") or ""))
+        rec = cache.get(str(a.get("uid") or "").strip()) or cache.get(_cache_key(a))
         if rec and rec.get("accessToken"):
             a["accessToken"] = rec["accessToken"]
             if rec.get("refreshToken"):
@@ -381,7 +395,29 @@ def load_accounts() -> list:
         print("❌ [凭据] TRAE_ACCOUNTS 中没有任何可用账号。", file=sys.stderr)
         sys.exit(1)
 
-    # 2) 单账号：原环境变量用法（兼容）
+    # 2) 兼容旧脚本部署：只给 TRAE_REFRESH_TOKEN（_2.._9 后缀 = 多账号），
+    #    accessToken 留空由 process_account 自动续期换取，真正零依赖。
+    rts = []
+    for name in ["TRAE_REFRESH_TOKEN"] + [f"TRAE_REFRESH_TOKEN_{i}" for i in range(2, 10)]:
+        v = os.getenv(name, "").strip()
+        if v:
+            rts.append((name, v))
+    if rts and not os.getenv("TRAE_ACCESS_TOKEN"):
+        accs = []
+        for name, v in rts:
+            idx = "1" if name == "TRAE_REFRESH_TOKEN" else name.split("_")[-1]
+            accs.append({
+                "accessToken":  os.getenv(f"TRAE_ACCESS_TOKEN_{idx}", "").strip(),
+                "refreshToken": v,
+                "deviceId":     os.getenv(f"TRAE_DEVICE_ID_{idx}", "").strip(),
+                "uid":          os.getenv(f"TRAE_UID_{idx}", "").strip(),
+                "name":         os.getenv(f"TRAE_NAME_{idx}", "") or f"账号{idx}",
+            })
+        accs = apply_token_cache(accs)
+        print(f"🔁 [兼容] 从 TRAE_REFRESH_TOKEN* 读到 {len(accs)} 个账号，accessToken 将自动续期换取")
+        return accs
+
+    # 3) 单账号：原环境变量用法（兼容）
     if os.getenv("TRAE_ACCESS_TOKEN") or os.getenv("TRAE_ICUBE_AUTH") or os.getenv("TRAE_STORAGE_PATH"):
         if os.getenv("TRAE_ICUBE_AUTH"):
             acc = _from_decrypted(json.loads(decrypt_storage_value(os.getenv("TRAE_ICUBE_AUTH").strip())),
@@ -401,7 +437,7 @@ def load_accounts() -> list:
             }
         return [acc]
 
-    print("❌ [凭据] 未找到任何账号配置，请设置 TRAE_ACCOUNTS 或单账号环境变量。", file=sys.stderr)
+    print("❌ [凭据] 未找到账号配置。可选写法：TRAE_ACCOUNTS(JSON数组，推荐) / TRAE_REFRESH_TOKEN(_2.._9) / TRAE_ACCESS_TOKEN+TRAE_REFRESH_TOKEN / TRAE_ICUBE_AUTH / TRAE_STORAGE_PATH", file=sys.stderr)
     sys.exit(1)
 
 
@@ -579,7 +615,8 @@ def checkin_claim(auth: dict):
 
 # ========================= 单个账号处理 =========================
 def process_account(auth: dict) -> dict:
-    name = auth.get("_name") or auth.get("uid") or "(未知)"
+    name = (auth.get("_name") or auth.get("name")
+            or auth.get("uid") or "(未知)")
     result = {"name": name, "uid": auth.get("uid", "-"), "icon": "✅",
               "status": "失败", "credits": "-", "detail": "", "_claimed": False}
 
@@ -726,14 +763,15 @@ def main() -> None:
     state = load_state()
     pending = []
     for acc in accounts:
-        key = str(acc.get("uid") or acc.get("_name") or "")
+        key = _acct_key(acc)
         rec = (state.get("done") or {}).get(key)
         if rec:
-            results.append({"name": acc.get("_name") or key, "uid": acc.get("uid", "-"),
+            results.append({"name": (acc.get("_name") or acc.get("name") or key),
+                            "uid": acc.get("uid", "-"),
                             "icon": "☑️", "status": "已签到",
                             "credits": rec.get("credits", "-"),
                             "detail": f"今日已完成（{rec.get('at','-')}），跳过请求"})
-            print(f"☑️  [{acc.get('_name') or key}] 今日已签到，跳过")
+            print(f"☑️  [{acc.get('_name') or acc.get('name') or key}] 今日已签到，跳过")
         else:
             pending.append(acc)
 
@@ -761,7 +799,7 @@ def main() -> None:
                     print(f"⏭  [熔断] 命中限流，跳过剩余 {rest} 个账号，等下一轮 cron")
                 break
             if r["status"] in ("签到成功", "已签到"):
-                mark_done(str(acc.get("uid") or acc.get("_name") or ""),
+                mark_done(_acct_key(acc),
                           {"status": r["status"], "credits": r.get("credits"),
                            "at": now_text()})
             prev_claimed = bool(r.get("_claimed"))
