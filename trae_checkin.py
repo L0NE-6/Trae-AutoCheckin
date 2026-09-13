@@ -309,10 +309,13 @@ def save_device_ids(ids: dict) -> None:
 
 
 def resolve_device_id(account: dict, manual: str) -> str:
-    """优先级：手动 deviceId > 已持久化 > 自动生成并持久化"""
+    """优先级：手动 deviceId > 已持久化 > 自动生成并持久化。
+    种子必须用稳定键(_acct_key)：早先用 accessToken 做种子，而 accessToken
+    每次续期都会变，导致设备号每轮都换、凭据文件无限增长 —— 对风控而言
+    "设备不停更换"本身就是高危信号。"""
     if manual and manual.isdigit() and len(manual) == 16:
         return manual
-    seed = account.get("uid") or account.get("accessToken", "") or account.get("name", "default")
+    seed = _acct_key(account)
     ids = load_device_ids()
     if seed in ids:
         return ids[seed]
