@@ -13,7 +13,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 多账号     TRAE_ACCOUNTS(JSON) / TRAE_REFRESH_TOKEN[_N] / 桌面端凭据 三种配法均可
   • 自动解密   直接读 Trae 客户端 storage.json，免抓包免手抄 token
   • 稳定设备   按账号生成固定 16 位设备号并持久化，跨运行不漂移
-  • 智能轮签   默认每轮只签 1 个账号、按小时轮换，从源头避开 9074 排队限流
+  • 一轮全签   默认每轮把所有未签账号全签掉，9074 自动换号兜底
   • 抗 9074    请求体带 req_source + 设备头（与客户端同款，缺了会被拒成 9074）
   • 失败让路   本轮没签成的交给下一轮 cron 补签，不硬轰、不拖其它账号下水
   • 积分余额   签到后用 entitlement 接口查真实余额，推送里直接给数字
@@ -44,7 +44,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_ICUBE_AUTH          桌面端加密凭据串（可选，自动解密）
   TRAE_STORAGE_PATH        storage.json 路径（可选，自动读取并解密）
   TRAE_DEVICE_ID[_N]       设备号（可选；留空则优先用客户端真实设备号，再回退生成）
-  TRAE_BATCH               每轮签几个账号（可选，默认 1 按小时轮换；all = 一轮全签）
+  TRAE_BATCH               每轮签几个账号（可选，默认 all 一轮全签；设 1 按小时轮换）
   TRAE_JITTER              启动随机抖动（可选，默认开；设 0 关闭 0~20s 错峰等待）
   TRAE_COOLDOWN_MIN        平时 9074 冷却分钟数（可选，默认 55）
   TRAE_PEAK_HOURS          早窗小时（可选，默认 0；支持 0 / 0,23 / 0-1）
@@ -77,8 +77,8 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
      积分查询另用 trae_credit_monitor.py
 
 🎛 运行模式
-  每小时轮签（默认） 每轮只签 1 个账号，按北京时间小时轮换，全天自然轮完全部
-  一轮多签          TRAE_BATCH=2 每轮签 2 个；TRAE_BATCH=all 一轮签完（靠错峰兜底）
+  一轮全签（默认）   不设 TRAE_BATCH，把所有未签账号一轮签完（9074 自动换号兜底）
+  按小时轮签         TRAE_BATCH=1 每轮只签 1 个账号，按北京时间小时轮换
   手动指定           TRAE_ONLY=3 只签第 3 个；也可填 uid 或 name
   当日去重           已签成功的账号当天不再请求接口，重复触发定时任务不浪费额度
 
@@ -574,12 +574,8 @@ def pick_batch(pending):
     排队限流，一轮只打一个号最稳；配上每小时一跑，全天自然把每个号都轮一遍。
     TRAE_BATCH=all 一轮全签（靠账号间错峰 + 熔断兜底），TRAE_BATCH=2 一轮签 2 个。"""
     raw = os.getenv('TRAE_BATCH', '').strip().lower()
-    if raw in ('all', '0'):
-        return pending
-    try:
-        size = max(1, int(raw)) if raw else 1
-    except Exception:
-        size = 1
+    if raw in ('all', '0', ''):
+        return pending          # 默认一轮全签，9074 自动换号兜底
     if pending and in_peak_hour():
         return pending        # 早窗容量最松，一轮把剩下的全签掉（账号间照常错峰）
     start = bj_now().tm_hour % max(1, len(pending))
