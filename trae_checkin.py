@@ -13,6 +13,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 多账号     TRAE_ACCOUNTS(JSON) / TRAE_REFRESH_TOKEN[_N] / 桌面端凭据 三种配法均可
   • 自动解密   直接读 Trae 客户端 storage.json，免抓包免手抄 token
   • 稳定设备   按账号生成固定 16 位设备号并持久化，跨运行不漂移
+  • 智能轮签   默认每轮只签 1 个账号、按小时轮换，从源头避开 9074 排队限流
   • 抗 9074    强制直连 + 单设备号头 + 每轮每号只 1 次 claim + 限流熔断 + 当日去重
   • 失败让路   本轮没签成的交给下一轮 cron 补签，不硬轰、不拖其它账号下水
   • 积分余额   签到后用 entitlement 接口查真实余额，推送里直接给数字
@@ -25,6 +26,9 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 熔断：任一账号命中限流，本轮剩余账号直接跳过，不一起拖进惩罚窗口
   • 当日状态文件 .trae_checkin_state.json —— 已签成功的账号后续运行零请求
   • HTTP 429/5xx 与 code=9074 同等对待；账号间真发过 claim 才错峰 12~25s
+  • 实测 00:00~00:10 是全天最高峰（整点所有人一起签），cron 别用 0 分；
+    本脚本启动后再随机抖 0~20s，避免同一定时任务的多个部署互相撞车
+  • 设备号优先用客户端真实号（storage.json 的 iCubeAuthInfo://icube-dc 键），拿不到才生成
 
 📦 环境变量
   TRAE_ACCOUNTS            多账号 JSON 数组（推荐），字段见下
@@ -33,7 +37,9 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_ACCESS_TOKEN        单账号 accessToken（可选）
   TRAE_ICUBE_AUTH          桌面端加密凭据串（可选，自动解密）
   TRAE_STORAGE_PATH        storage.json 路径（可选，自动读取并解密）
-  TRAE_DEVICE_ID[_N]       设备号（可选，留空自动按账号生成固定 16 位）
+  TRAE_DEVICE_ID[_N]       设备号（可选；留空则优先用客户端真实设备号，再回退生成）
+  TRAE_BATCH               每轮签几个账号（可选，默认 1 按小时轮换；all = 一轮全签）
+  TRAE_JITTER              启动随机抖动（可选，默认开；设 0 关闭 0~20s 错峰等待）
   TRAE_UID[_N]             账号标识（可选，仅用于日志）
   TRAE_ONLY                只跑指定账号：序号 / uid / 名字（可选）
   CLAIM_TRIES              单轮 claim 重试次数（可选，默认 1，调大反而更容易被限）
@@ -52,12 +58,16 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
 
 🚀 使用方法（青龙面板）
   1. 脚本放入 /ql/data/scripts/，环境变量填好 TRAE_ACCOUNTS 与 QYWX_TOKEN
-  2. 定时任务：python /ql/data/scripts/trae_checkin.py   定时 */30 * * * *
-  3. 高频轻量即可，全天多轮会自然把每个账号都签上；积分查询另用 trae_credit_monitor.py
+  2. 定时任务：python /ql/data/scripts/trae_checkin.py   定时 7,37 * * * *
+     （避开 0 分整点高峰；默认每轮只签 1 个号，24 小时足够把全部账号轮完）
+  3. 想一轮全签（多账号少、能接受慢一点）设 TRAE_BATCH=all，靠熔断+错峰兜底；
+     积分查询另用 trae_credit_monitor.py
 
 🎛 运行模式
-  全量轮签（默认）  不设 TRAE_ONLY，按当日状态文件跳过已签账号，只补没签上的
-  手动指定         TRAE_ONLY=3 只签第 3 个；也可填 uid 或 name
+  每小时轮签（默认） 每轮只签 1 个账号，按北京时间小时轮换，全天自然轮完全部
+  一轮多签          TRAE_BATCH=2 每轮签 2 个；TRAE_BATCH=all 一轮签完（靠错峰兜底）
+  手动指定           TRAE_ONLY=3 只签第 3 个；也可填 uid 或 name
+  当日去重           已签成功的账号当天不再请求接口，重复触发定时任务不浪费额度
 
 📌 特别说明
   • 签接口按"设备号"维度判断今日是否已签；实测用模拟的 16 位数字即可签到成功，
@@ -79,7 +89,7 @@ EP_STATUS = UgHost + '/trae/api/v2/ug/checkin_credits/status'
 EP_CLAIM = UgHost + '/trae/api/v2/ug/checkin_credits/claim'
 EP_EXCHANGE = OAuthHost + '/cloudide/api/v3/trae/oauth/ExchangeToken'
 EP_ENTITLE = UgHost + '/trae/api/v2/pay/user_current_entitlement_list'
-AUTH_FAIL_CODES = (1001, 1002)             # 未认证 / token 失效
+AUTH_FAIL_CODES = (1001, 1002, 401, 403)    # 未认证 / token 失效 / 鉴权类 HTTP
 RATE_HTTP_CODES = (429, 500, 502, 503, 504)
 RATE_CODE = 9074                            # 参与用户太多（排队限流，可重试）
 ALREADY_CODE = 9095                         # 今日已签
@@ -149,22 +159,38 @@ def decrypt_storage_value(base64_value):
     dec = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
     decrypted = dec.update(buf[38:]) + dec.finalize()
     stored_hash, plaintext = decrypted[0:64], decrypted[64:]
-    # 去掉尾部填充字节（零填充等）后再校验与解析
-    plaintext = plaintext.rstrip(b'\x00').rstrip()
+    # 桌面端写盘用 PKCS7 填充，去掉填充后再校验与解析（旧的非零填充一并兼容）
+    pad = plaintext[-1] if plaintext else 0
+    if 1 <= pad <= 16:
+        plaintext = plaintext[:-pad]
+    else:
+        plaintext = plaintext.rstrip(b'\x00').rstrip()
     if stored_hash != hashlib.sha512(plaintext).digest():
         raise ValueError('SHA-512 校验失败，解密可能不正确')
     return plaintext.decode('utf-8')
 
 
+def dc_device_id(storage):
+    """取客户端真实设备号：storage.json 里 iCubeAuthInfo://icube-dc:<numeric> 键。
+    真机设备号比脚本生成的号更像正常客户端，拿不到时才回退生成号。"""
+    for k in storage:
+        if k.startswith('iCubeAuthInfo://icube-dc:'):
+            d = k.split(':')[-1]
+            if d.isdigit():
+                return d
+    return ''
+
+
 def load_from_storage(storage_path):
+    """返回 (解密后的登录凭据, 客户端真实设备号)。"""
     with open(storage_path, 'r', encoding='utf-8') as fh:
         storage = json.load(fh)
     enc = (storage.get(STORAGE_KEY) or '').strip()
     if not enc:
         raise ValueError('storage.json 里找不到 %s' % STORAGE_KEY)
     if enc.startswith('{'):
-        return json.loads(enc)
-    return json.loads(decrypt_storage_value(enc))
+        return json.loads(enc), dc_device_id(storage)
+    return json.loads(decrypt_storage_value(enc)), dc_device_id(storage)
 
 
 # ══════════════════ 缓存文件 ══════════════════
@@ -434,12 +460,15 @@ def save_device_ids(ids):
 
 
 def device_id_for(acc, manual=''):
-    """优先级：手动 deviceId > 已持久化 > 自动生成并持久化。
+    """优先级：手动 deviceId > 客户端真实设备号 > 已持久化 > 自动生成并持久化。
     种子必须用稳定键(_acct_key)：早先用 accessToken 做种子，而 accessToken
     每次续期都会变，导致设备号每轮都换、凭据文件无限增长 —— 对风控而言
     "设备不停更换"本身就是高危信号。"""
     if manual and manual.isdigit() and len(manual) == 16:
         return manual
+    real = str(acc.get('_realDid') or '').strip()
+    if real.isdigit() and len(real) == 16:
+        return real
     seed = _acct_key(acc)
     ids = load_device_ids()
     if seed in ids:
@@ -451,6 +480,21 @@ def device_id_for(acc, manual=''):
 
 
 # ══════════════════ 账号读取 ══════════════════
+def pick_batch(pending):
+    """每轮默认只签 1 个账号，按北京时间小时轮换 —— 9074 是服务端按出口 IP 的
+    排队限流，一轮只打一个号最稳；配上每小时一跑，全天自然把每个号都轮一遍。
+    TRAE_BATCH=all 一轮全签（靠账号间错峰 + 熔断兜底），TRAE_BATCH=2 一轮签 2 个。"""
+    raw = os.getenv('TRAE_BATCH', '').strip().lower()
+    if raw in ('all', '0'):
+        return pending
+    try:
+        size = max(1, int(raw)) if raw else 1
+    except Exception:
+        size = 1
+    start = bj_now().tm_hour % max(1, len(pending))
+    return (pending[start:] + pending[:start])[:size]
+
+
 def pick(d, *candidates):
     for c in candidates:
         if c in d and d[c]:
@@ -458,23 +502,25 @@ def pick(d, *candidates):
     return ''
 
 
-def normalize(d, src, name=''):
+def normalize(d, src, name='', real=''):
     return {'accessToken': pick(d, 'accessToken', 'token', 'access_token'),
             'refreshToken': pick(d, 'refreshToken', 'refresh_token'),
             'deviceId': pick(d, 'deviceId', 'device_id'),
             'uid': str(pick(d, 'uid', 'userId', 'user_id')),
-            '_src': src, '_name': name}
+            '_src': src, '_name': name, '_realDid': real}
 
 
 def build_account(raw, name):
-    # 1) 明文 token 直给  2) 桌面端加密凭据串  3) 指定 storage.json 路径
+    # 1) 明文 token 直给  2) 桌面端加密凭据串  3) 指定 storage.json 路径（带真实设备号）
     if raw.get('accessToken'):
-        return normalize(raw, 'accounts.json(明文token)', name or raw.get('uid', name))
+        return normalize(raw, 'accounts.json(明文token)', name or raw.get('uid', name),
+                         str(raw.get('realDeviceId') or ''))
     if raw.get('icubeAuth'):
         return normalize(json.loads(decrypt_storage_value(raw['icubeAuth'].strip())),
                          'accounts.json(icubeAuth)', name)
     if raw.get('storagePath'):
-        return normalize(load_from_storage(raw['storagePath']), raw['storagePath'], name)
+        d, real = load_from_storage(raw['storagePath'])
+        return normalize(d, raw['storagePath'], name, real)
     raise ValueError('账号 %s 缺少 accessToken / icubeAuth / storagePath' % (name or '(未命名)'))
 
 
@@ -548,8 +594,8 @@ def load_accounts():
             acc = normalize(json.loads(decrypt_storage_value(os.getenv('TRAE_ICUBE_AUTH').strip())),
                             '环境变量 TRAE_ICUBE_AUTH')
         elif os.getenv('TRAE_STORAGE_PATH'):
-            acc = normalize(load_from_storage(os.getenv('TRAE_STORAGE_PATH')),
-                            os.getenv('TRAE_STORAGE_PATH'))
+            d, real = load_from_storage(os.getenv('TRAE_STORAGE_PATH'))
+            acc = normalize(d, os.getenv('TRAE_STORAGE_PATH'), '', real)
         else:
             acc = {'accessToken': os.getenv('TRAE_ACCESS_TOKEN', ''),
                    'refreshToken': os.getenv('TRAE_REFRESH_TOKEN', ''),
@@ -581,13 +627,15 @@ def status_of(token, device_id):
 
 
 def claim(token, device_id):
-    """签到领取积分一次，以业务 code 为准：0 成功 / 9095 今日已签 / 9074 限流可重试。"""
+    """签到领取积分一次，以业务 code 为准：0 成功 / 9095 今日已签 / 9074 限流可重试。
+    返回 (http, code, message, 本次积分)。"""
     status, text = _post(EP_CLAIM, ug_headers(token, device_id))
     try:
         body = json.loads(text)
-        return status, body.get('code', -1), body.get('message') or text[:120]
     except Exception:
-        return status, '?', text
+        return status, '?', text, None
+    points = ((body.get('data') or {}).get('points')) if isinstance(body.get('data'), dict) else None
+    return status, body.get('code', -1), body.get('message') or text[:120], points
 
 
 def is_rate(code, status):
@@ -597,24 +645,24 @@ def is_rate(code, status):
 def claim_with_retry(acc, cache):
     """每账号每轮只发 1 次 claim（CLAIM_TRIES 可调大，但一般没必要）。
     9074 属服务端排队限流，短时间内反复轰会被延长惩罚，失败即收工交给下轮 cron；
-    code=1001 时先续期 token 再立即重试（不占退避）。返回 (ok, code, msg)。"""
+    code=1001 时先续期 token 再立即重试（不占退避）。返回 (ok, code, msg, 本次积分)。"""
     try:
         tries = max(1, int(os.getenv('CLAIM_TRIES', '1')))
     except Exception:
         tries = 1
     last = ('?', '')
     for attempt in range(1, tries + 1):
-        status, code, msg = claim(acc['accessToken'], acc.get('deviceId'))
+        status, code, msg, points = claim(acc['accessToken'], acc.get('deviceId'))
         last = (code, msg)
         if code == 0:
-            return True, code, msg
+            return True, code, msg, points
         if code == ALREADY_CODE:
-            return False, code, msg
+            return False, code, msg, None
         if code in AUTH_FAIL_CODES and acc.get('refreshToken'):
             print('🔑 [claim] 检测到 code=%s，尝试刷新 token ...' % code)
             ok, rmsg = ensure_token(acc, cache)
             if not ok:
-                return False, code, rmsg
+                return False, code, rmsg, None
             continue
         if not is_rate(code, status):
             return False, code, msg
@@ -624,15 +672,29 @@ def claim_with_retry(acc, cache):
             time.sleep(wait)
             continue
         print('⏳ [限流] 本轮放弃，等下轮 cron 自动补签')
-    return False, last[0], last[1]
+    return False, last[0], last[1], None
 
 
 def credits_summary(acc):
-    """查询当前积分余额（entitlement API，比 status 的数字更准）。查不到返回 None。"""
+    """查询当前积分余额：优先用 usage_summary（总额-已用），再按 entitlement
+    包求和兜底。实测该接口把 pack_list 放在根级（逆向资料里是 data 包装），两种都认。
+    查不到返回 None。"""
     status, text = _post(EP_ENTITLE, ug_headers(acc['accessToken'], acc.get('deviceId')),
                          '{"require_usage": true}', 15)
     try:
-        packs = ((json.loads(text).get('data') or {}).get('user_entitlement_pack_list')) or []
+        d = json.loads(text)
+    except Exception:
+        return None
+    root = d.get('data') or d
+    us = root.get('usage_summary') or {}
+    try:
+        total_amount, consumed = float(us.get('total_amount') or 0), float(us.get('consumed_amount') or 0)
+        if total_amount > 0:
+            return total_amount - consumed
+    except Exception:
+        pass
+    try:
+        packs = root.get('user_entitlement_pack_list') or []
         total, found = 0, False
         for p in packs:
             limit = ((p.get('entitlement_base_info') or {}).get('quota') or {}).get('credits_limit') or 0
@@ -754,13 +816,14 @@ def checkin_account(acc, cache):
         return result
 
     result['_claimed'] = True          # 只有真正发过 claim 才需要账号间错峰
-    ok, code, msg = claim_with_retry(acc, cache)
+    ok, code, msg, gained = claim_with_retry(acc, cache)
     if ok:
         pts = credits_summary(acc)
         result['status'] = '签到成功'
+        gain = ('，本次 +%s 积分' % _fmt(gained)) if gained else ''
         if pts is not None:
             result['credits'] = pts
-            result['detail'] = '签到成功（code=0），当前积分余额 %s' % _fmt(pts)
+            result['detail'] = '签到成功%s，当前余额 %s' % (gain, _fmt(pts))
         else:
             _, credits_after, _, _, _ = status_of(acc['accessToken'], acc['deviceId'])
             result['credits'] = credits_after if credits_after is not None else credits
@@ -819,8 +882,17 @@ def main():
     if not pending:
         print('✅ 全部账号今日均已完成，无需请求接口')
 
+    batch = pick_batch(pending)
+    if len(batch) < len(pending):
+        names = '、'.join(a.get('_name') or a.get('name') or _acct_key(a) for a in batch)
+        print('🎚  [轮签] 本轮只签 %s（其余交给后续 cron，避开整点排队限流）' % names)
+    if batch and os.getenv('TRAE_JITTER', '1').strip() != '0':
+        wait = random.randint(0, 20)
+        print('🎲 [错峰] 随机等待 %d 秒再请求…' % wait)
+        time.sleep(wait)
+
     prev_claimed = False
-    for idx, acc in enumerate(pending):
+    for idx, acc in enumerate(batch):
         # 只有上一次真的发过 claim 才需要错峰；纯只读的 status 查询不必等待，
         # 否则"全部已签到"的巡检也要白等一分多钟。
         if idx > 0 and prev_claimed:
@@ -833,7 +905,7 @@ def main():
                 # 命中限流说明当前出口 IP 已在惩罚窗口内，
                 # 继续打后面的账号只会一起失败并延长窗口 —— 直接收工等下一轮。
                 results.append(r)
-                rest = len(pending) - idx - 1
+                rest = len(batch) - idx - 1
                 if rest > 0:
                     print('⏭  [熔断] 命中限流，跳过剩余 %d 个账号，等下一轮 cron' % rest)
                 break
