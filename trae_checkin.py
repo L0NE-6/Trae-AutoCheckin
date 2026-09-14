@@ -23,10 +23,12 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 强制直连，不走系统代理 / Clash —— 多账号共用一个出口 IP 最容易触发限流
   • 只发一个小写 x-device-id —— 同时发大小写两个头会被风控判为异常客户端
   • 每账号每轮只发 1 次 claim —— 9074 是按时间窗口排队，当场连发反而延长惩罚窗口
-  • 熔断：任一账号命中限流，本轮剩余账号直接跳过，不一起拖进惩罚窗口
+  • 不再连坐：某个账号 9074 只给自己记冷却，其余账号继续签
+    （想恢复旧行为一个被限就全体收工，设 TRAE_CIRCUIT=1）
   • 当日状态文件 .trae_checkin_state.json —— 已签成功的账号后续运行零请求
   • HTTP 429/5xx 与 code=9074 同等对待；账号间真发过 claim 才错峰 12~25s
-  • 9074 命中后给该账号记 55 分钟冷却，冷却内零请求，到点再由 cron 补签
+  • 9074 命中后按账号记冷却（早窗 12 分钟 / 平时 55 分钟），冷却内零请求
+  • 早窗(TRAE_PEAK_HOURS，默认 0 点)自动一轮全签，其余时段每小时轮 1 个
   • 实测结论：换设备号 / 换出口 IP / 换请求头 都绕不开 9074（服务端按"当前
     参与用户太多"做容量门），凌晨 0 点前后最容易签成，所以 cron 建议放在 00:23
   • 实测 00:00~00:10 是全天最高峰（整点所有人一起签），cron 别用 0 分；
@@ -43,7 +45,10 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_DEVICE_ID[_N]       设备号（可选；留空则优先用客户端真实设备号，再回退生成）
   TRAE_BATCH               每轮签几个账号（可选，默认 1 按小时轮换；all = 一轮全签）
   TRAE_JITTER              启动随机抖动（可选，默认开；设 0 关闭 0~20s 错峰等待）
-  TRAE_COOLDOWN_MIN        9074 后的单账号冷却分钟数（可选，默认 55）
+  TRAE_COOLDOWN_MIN        平时 9074 冷却分钟数（可选，默认 55）
+  TRAE_PEAK_HOURS          早窗小时（可选，默认 0；支持 0 / 0,23 / 0-1）
+  TRAE_PEAK_COOLDOWN_MIN   早窗内冷却分钟数（可选，默认 12）
+  TRAE_CIRCUIT             设 1 恢复旧熔断：一个账号 9074 就全体收工（默认关）
   TRAE_UID[_N]             账号标识（可选，仅用于日志）
   TRAE_ONLY                只跑指定账号：序号 / uid / 名字（可选）
   CLAIM_TRIES              单轮 claim 重试次数（可选，默认 1，调大反而更容易被限）
@@ -63,8 +68,8 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
 🚀 使用方法（青龙面板）
   1. 脚本放入 /ql/data/scripts/，环境变量填好 TRAE_ACCOUNTS 与 QYWX_TOKEN
   2. 定时任务：python /ql/data/scripts/trae_checkin.py
-     早窗主力：  23 0 * * *     ← 实测 00:15~00:45 连续签成，务必卡这个窗口
-     其余补签：  7,37 * * * *   ← 冷却到点的账号会被自动补上，签成了就不再请求
+     早窗主力：  23 0 * * *     ← 实测 00:15~00:45 连续签成，早窗自动一轮全签
+     其余补签：  7,37 * * * *   ← 冷却 12 分钟到点就补，签成了就不再请求
   3. 想一轮全签（多账号少、能接受慢一点）设 TRAE_BATCH=all，靠熔断+错峰兜底；
      积分查询另用 trae_credit_monitor.py
 
@@ -301,6 +306,15 @@ def mark_done(key, info):
         print('⚠️  [状态] 写入失败:', e)
 
 
+def cooldown_minutes():
+    """9074 后冷却多久：早窗短冷却（默认 12 分钟），平时长冷却（默认 55 分钟）。"""
+    env = 'TRAE_PEAK_COOLDOWN_MIN' if in_peak_hour() else 'TRAE_COOLDOWN_MIN'
+    try:
+        return max(1, int(os.getenv(env, str(PEAK_COOLDOWN_MIN if in_peak_hour() else COOLDOWN_MIN))))
+    except Exception:
+        return PEAK_COOLDOWN_MIN if in_peak_hour() else COOLDOWN_MIN
+
+
 def set_cooldown(key, minutes):
     """9074 后给该账号记一个冷却时间：反正换设备号/换出口 IP 都没用（实测），
     短时间反复戳只会刷屏，冷却到点再由 cron 补签。"""
@@ -511,6 +525,25 @@ def device_id_for(acc, manual=''):
 
 
 # ══════════════════ 账号读取 ══════════════════
+def parse_hours(spec):
+    """把 '0' / '0,23' / '0-1' 解析成小时集合，解析不了就返回空集合。"""
+    hours = set()
+    for part in (spec or '').replace('，', ',').split(','):
+        part = part.strip()
+        if '-' in part:
+            a, _, b = part.partition('-')
+            if a.strip().isdigit() and b.strip().isdigit():
+                hours |= {h % 24 for h in range(int(a), int(b) + 1)}
+        elif part.isdigit():
+            hours.add(int(part) % 24)
+    return hours
+
+
+def in_peak_hour(now=None):
+    """是否处于早窗（TRAE_PEAK_HOURS，默认 0 点）——实测 00:15~00:45 最容易签成。"""
+    return (now or bj_now()).tm_hour in parse_hours(os.getenv('TRAE_PEAK_HOURS', '0'))
+
+
 def pick_batch(pending):
     """每轮默认只签 1 个账号，按北京时间小时轮换 —— 9074 是服务端按出口 IP 的
     排队限流，一轮只打一个号最稳；配上每小时一跑，全天自然把每个号都轮一遍。
@@ -522,6 +555,8 @@ def pick_batch(pending):
         size = max(1, int(raw)) if raw else 1
     except Exception:
         size = 1
+    if pending and in_peak_hour():
+        return pending        # 早窗容量最松，一轮把剩下的全签掉（账号间照常错峰）
     start = bj_now().tm_hour % max(1, len(pending))
     return (pending[start:] + pending[:start])[:size]
 
@@ -849,7 +884,7 @@ def checkin_account(acc, cache):
     result['_claimed'] = True          # 只有真正发过 claim 才需要账号间错峰
     ok, code, msg, gained = claim_with_retry(acc, cache)
     if code == RATE_CODE:
-        set_cooldown(_acct_key(acc), COOLDOWN_MIN)
+        set_cooldown(_acct_key(acc), cooldown_minutes())
     if ok:
         pts = credits_summary(acc)
         result['status'] = '签到成功'
@@ -891,7 +926,8 @@ def _fmt(v):
 # ══════════════════ 主流程 ══════════════════
 SOFT = ('待重试',)               # 限流类，冷却到点由 cron 补签，不算失败
 DEAD = ('未开放', '鉴权失败')      # 需要人工处理
-COOLDOWN_MIN = 55                # 9074 冷却分钟数，实测 8 小时后仍未解除，那就一小时一试
+COOLDOWN_MIN = 55                # 平时 9074 冷却分钟数（实测 8 小时后仍未解除，一小时一试）
+PEAK_COOLDOWN_MIN = 12           # 早窗内的短冷却，好让下一轮还在窗口里补签
 GAP_MIN, GAP_MAX = 12, 25        # 实测 25s 间隔可让相邻账号连续签到成功
 
 
@@ -944,13 +980,17 @@ def main():
         try:
             r = checkin_account(acc, cache)
             if r['status'] == '待重试':
-                # 命中限流说明当前出口 IP 已在惩罚窗口内，
-                # 继续打后面的账号只会一起失败并延长窗口 —— 直接收工等下一轮。
+                # 实测 9074 是按账号/时间片的容量门，与出口 IP 无关，
+                # 所以不再"连坐"：失败的记冷却，后面的账号继续签。
+                # 想恢复旧行为（一个被限就全体收工）设 TRAE_CIRCUIT=1。
                 results.append(r)
-                rest = len(batch) - idx - 1
-                if rest > 0:
-                    print('⏭  [熔断] 命中限流，跳过剩余 %d 个账号，等下一轮 cron' % rest)
-                break
+                if os.getenv('TRAE_CIRCUIT', '0').strip() == '1':
+                    rest = len(batch) - idx - 1
+                    if rest > 0:
+                        print('⏭  [熔断] 命中限流，跳过剩余 %d 个账号，等下一轮 cron' % rest)
+                    break
+                prev_claimed = True     # 刚发过 claim，下一个账号照常错峰
+                continue
             if r['status'] in ('签到成功', '已签到'):
                 mark_done(_acct_key(acc), {'status': r['status'], 'credits': r.get('credits'),
                                            'at': bj()})
