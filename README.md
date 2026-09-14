@@ -35,11 +35,12 @@
 
 - 🪶 **零依赖** — 只用 Python 标准库，开箱即用
 - 🛡️ **抗 9074 限流** — 强制直连 + 每账号单次尝试 + 熔断收工，不硬打
+- 🔁 **智能轮签** — 默认每轮只签 1 个账号并按小时轮换，从源头避开整点排队限流
 - 🔐 **Token 缓存** — 复用未过期的 `accessToken`，失效才续期，减少请求
 - ⛓️ **链式续期** — 自动处理 `refreshToken` 轮换并回写，长期不失效
 - 👥 **多账号** — 支持任意数量账号，环境变量即可配置
 - 📅 **当日跳过** — 已签成功的账号后续运行零请求，不白烧限流额度
-- 📱 **稳定设备号** — 按账号生成固定 16 位设备号，跨运行不漂移
+- 📱 **稳定设备号** — 优先用客户端真实设备号，拿不到才按账号生成固定 16 位
 - 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
 - 📲 **短信登录** — 无需客户端，手机号 + 验证码直接换 Token
 - 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
@@ -129,7 +130,7 @@ python trae_sms_login.py --selftest
 # 2. 在「环境变量」里添加 TRAE_REFRESH_TOKEN_* 和 QYWX_TOKEN
 
 # 3. 新建定时任务（建议高频轻量，不硬打）
-python /ql/data/scripts/trae_checkin.py          # 定时: */30 * * * *
+python /ql/data/scripts/trae_checkin.py          # 定时: 7,37 * * * *
 python /ql/data/scripts/trae_credit_monitor.py   # 定时: 0 * * * *
 ```
 
@@ -157,10 +158,12 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_ICUBE_AUTH` | ➖ | 桌面端加密凭据串，脚本自动解密（需 cryptography） |
 | `TRAE_STORAGE_PATH` | ➖ | 直接指向客户端 `storage.json`，自动解密取 token |
 | `TRAE_UID[_N]` | ➖ | 账号标识，仅用于日志与缓存键 |
-| `TRAE_DEVICE_ID[_N]` | ➖ | 设备号，留空自动按账号生成固定值 |
+| `TRAE_DEVICE_ID[_N]` | ➖ | 设备号；留空则优先用客户端真实设备号，再回退自动生成 |
 | `TRAE_TOKEN_CACHE` | ➖ | token 缓存路径，默认 `/ql/data/config/` 或脚本同目录 |
 | `TRAE_ACCOUNT_DIR` | ➖ | 回写轮换后 refreshToken 的账号 JSON 目录 |
 | `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
+| `TRAE_BATCH` | ➖ | 每轮签几个账号，默认 **1**（按小时轮换）；`all` = 一轮全签 |
+| `TRAE_JITTER` | ➖ | 启动随机抖 0~20s 避开整点同秒，默认开；设 `0` 关闭 |
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（抗限流，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
