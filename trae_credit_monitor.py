@@ -11,12 +11,12 @@ Trae CreditMonitor · Trae 积分余额监控
   • 只读安全   只调用查询接口，不会签到、不会消耗任何积分
   • Token 缓存 与签到脚本共用缓存，复用未过期的 accessToken
   • 链式续期   refreshToken 轮换时自动回写最新值，长期不失效
-  • 多账号     支持任意数量账号，环境变量 TRAE_REFRESH_TOKEN[_N] 配置
+  • 多账号     与签到脚本共用 TRAE_ACCOUNTS，也兼容 TRAE_REFRESH_TOKEN[_N]
   • 微信推送   已用 / 剩余积分一目了然
 
 📦 环境变量
-  TRAE_REFRESH_TOKEN       第 1 个账号的 refreshToken（必填）
-  TRAE_REFRESH_TOKEN_2~_N  第 2~N 个账号的 refreshToken（可选）
+TRAE_ACCOUNTS            多账号 JSON 数组（推荐，与签到脚本共用同一个变量）
+TRAE_REFRESH_TOKEN       旧部署兼容：refreshToken（也支持 _2~_N 后缀多账号）
   WECHAT_WEBHOOK           企业微信机器人 webhook 地址（可选，用于推送）
   TRAE_TOKEN_CACHE         缓存文件路径（可选，默认 /ql/data/config/ 或脚本同目录）
   TRAE_SAVE_DIR            账号 JSON 所在目录（可选，用于回写轮换后的 refreshToken）
@@ -35,9 +35,9 @@ Trae CreditMonitor · Trae 积分余额监控
     解密算法已内置在 trae_get_token.py 中，直接跑脚本即可自动解密。
 
 🚀 使用方法（青龙面板）
-  1. 脚本放入 /ql/data/scripts/，环境变量填好 TRAE_REFRESH_TOKEN_* 与 WECHAT_WEBHOOK
+  1. 脚本放入 /ql/data/scripts/，环境变量填好 TRAE_ACCOUNTS 与 QYWX_TOKEN
   2. 定时任务：python /ql/data/scripts/trae_credit_monitor.py   定时 0 * * * *
-  3. 默认查询全部账号；设 JOB_INDEX 可只查部分（用法同签到脚本）
+  3. 默认查询全部账号；设 TRAE_ONLY 可只查部分（用法同签到脚本）
 
 📌 特别说明
   • refreshToken 是轮换链：每次续期都会产生新值，脚本会写回缓存与账号文件，
@@ -62,15 +62,15 @@ def _cache_path():
     p = os.environ.get('TRAE_TOKEN_CACHE', '').strip()
     if p:
         return p
-    for cand in ('/ql/data/config/trae_token_cache.json',
-                 os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trae_token_cache.json')):
+    for cand in ('/ql/data/config/.trae_token_cache.json',
+                 os.path.join(os.path.dirname(os.path.abspath(__file__)), '.trae_token_cache.json')):
         try:
             d = os.path.dirname(cand)
             if d and os.path.isdir(d):
                 return cand
         except Exception:
             pass
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trae_token_cache.json')
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), '.trae_token_cache.json')
 
 
 def load_cache():
@@ -149,8 +149,8 @@ def stable_device_id(seed):
 
 
 def persist_refresh_token(uid, new_rt, seed_rt):
-    """把续期后的最新 refreshToken 回写到账号 JSON（需设 TRAE_SAVE_DIR）。"""
-    d = os.environ.get('TRAE_SAVE_DIR', '').strip()
+    """把续期后的最新 refreshToken 回写到账号 JSON（需设 TRAE_ACCOUNT_DIR）。"""
+    d = os.environ.get('TRAE_ACCOUNT_DIR', '').strip()
     if not d or not os.path.isdir(d):
         return
     for fn in os.listdir(d):
@@ -256,37 +256,61 @@ def bj():
 
 
 # ══════════════════ 账号选择 ══════════════════
-def selected_indexes():
-    raw = os.environ.get('JOB_INDEX', '').strip()
-    idxs = []
+def load_accounts():
+    """优先读 TRAE_ACCOUNTS（与签到脚本共用同一个变量），否则退回旧变量。"""
+    raw = os.environ.get('TRAE_ACCOUNTS', '').strip()
     if raw:
-        for part in raw.replace(',', ' ').split():
-            if part.isdigit() and int(part) >= 1:
-                idxs.append(int(part))
-    if idxs:
-        return sorted(set(idxs))
-    return []
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            data = [data]
+        only = os.environ.get('TRAE_ONLY', '').strip()
+        accounts = []
+        for i, a in enumerate(data):
+            rt = a.get('refreshToken', '').strip()
+            if not rt:
+                continue
+            idx = i + 1
+            label = a.get('name') or a.get('uid') or '账号%d' % idx
+            if only and only not in (str(idx), str(a.get('uid', '')), label):
+                continue
+            accounts.append((idx, rt, a.get('deviceId', '').strip(), label))
+        if accounts:
+            return accounts
+    only = os.environ.get('TRAE_ONLY', '').strip()
+    accounts = []
+    for i in range(1, 10):
+        name = 'TRAE_REFRESH_TOKEN' if i == 1 else 'TRAE_REFRESH_TOKEN_%d' % i
+        rt = os.environ.get(name, '').strip()
+        if not rt:
+            continue
+        did = os.environ.get('TRAE_DEVICE_ID' if i == 1 else 'TRAE_DEVICE_ID_%d' % i, '').strip()
+        label = '账号%d' % i
+        if only and only not in (str(i), label):
+            continue
+        accounts.append((i, rt, did, label))
+    return accounts
 
 
 def iter_accts():
-    for i in (selected_indexes() or range(1, 6)):
-        t = os.environ.get('TRAE_REFRESH_TOKEN' if i == 1 else 'TRAE_REFRESH_TOKEN_%d' % i, '').strip()
-        if not t:
-            continue
-        yield i, t, os.environ.get('TRAE_DEVICE_ID' if i == 1 else 'TRAE_DEVICE_ID_%d' % i, '').strip()
+    for idx, rt, did, label in load_accounts():
+        yield idx, rt, did, label
 
 
 def main():
     accts = list(iter_accts())
     if not accts:
-        print('❌ 未找到 TRAE_REFRESH_TOKEN')
+        print('❌ 未找到账号配置（TRAE_ACCOUNTS 或 TRAE_REFRESH_TOKEN）')
         sys.exit(1)
-    webhook = os.environ.get('WECHAT_WEBHOOK', '').strip()
+    webhook = os.environ.get('QYWX_TOKEN') or os.environ.get('WECHAT_WEBHOOK') or ''
+    if webhook and 'key=' in webhook:
+        webhook = webhook.split('key=')[-1].strip()
+    if webhook:
+        webhook = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=' + webhook
     cache = load_cache()
     ok, fail = [], []
     out = ['📊 Trae 积分监控', '🕒 ' + bj()]
-    for i, (idx, rt, did) in enumerate(accts):
-        name = 'acct %d' % idx
+    for i, (idx, rt, did, label) in enumerate(accts):
+        name = label if label else '账号%d' % idx
         token, did, new_rt, err = get_token(idx, rt, did, cache)
         if not token:
             print('❌ [%s] 凭证续期失败: %s' % (name, err))
