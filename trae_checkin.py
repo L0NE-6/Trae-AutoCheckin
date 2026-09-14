@@ -14,7 +14,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 自动解密   直接读 Trae 客户端 storage.json，免抓包免手抄 token
   • 稳定设备   按账号生成固定 16 位设备号并持久化，跨运行不漂移
   • 智能轮签   默认每轮只签 1 个账号、按小时轮换，从源头避开 9074 排队限流
-  • 抗 9074    强制直连 + 单设备号头 + 每轮每号只 1 次 claim + 限流熔断 + 当日去重
+  • 抗 9074    请求体带 req_source + 设备头（与客户端同款，缺了会被拒成 9074）
   • 失败让路   本轮没签成的交给下一轮 cron 补签，不硬轰、不拖其它账号下水
   • 积分余额   签到后用 entitlement 接口查真实余额，推送里直接给数字
   • 微信推送   企业微信群机器人 / PushPlus，多账号结果一目了然
@@ -27,7 +27,8 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
     （想恢复旧行为一个被限就全体收工，设 TRAE_CIRCUIT=1）
   • 当日状态文件 .trae_checkin_state.json —— 已签成功的账号后续运行零请求
   • HTTP 429/5xx 与 code=9074 同等对待；账号间真发过 claim 才错峰 12~25s
-  • 9074 命中后按账号记冷却（早窗 12 分钟 / 平时 55 分钟），冷却内零请求
+  • 9074 反复出现 = 设备号被服务端记住，自动换新设备号立刻重签（实测有效）
+  • 换号后仍 9074 才按账号记冷却（早窗 12 分钟 / 平时 55 分钟），冷却内零请求
   • 早窗(TRAE_PEAK_HOURS，默认 0 点)自动一轮全签，其余时段每小时轮 1 个
   • 实测结论：换设备号 / 换出口 IP / 换请求头 都绕不开 9074（服务端按"当前
     参与用户太多"做容量门），凌晨 0 点前后最容易签成，所以 cron 建议放在 00:23
@@ -88,7 +89,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
 ────────────────────────────────────────────────────────────
 """
 
-import base64, glob, hashlib, json, os, random, sys, time, urllib.request, urllib.error
+import base64, glob, hashlib, json, os, platform, random, sys, time, urllib.request, urllib.error
 
 UgHost = 'https://api.trae.cn'
 OAuthHost = 'https://api.trae.com.cn'
@@ -102,6 +103,8 @@ EP_ENTITLE = UgHost + '/trae/api/v2/pay/user_current_entitlement_list'
 AUTH_FAIL_CODES = (1001, 1002, 401, 403)    # 未认证 / token 失效 / 鉴权类 HTTP
 RATE_HTTP_CODES = (429, 500, 502, 503, 504)
 RATE_CODE = 9074                            # 参与用户太多（排队限流，可重试）
+REQ_SOURCE = 1                              # 客户端签到请求体固定带 {"req_source":1}
+REQ_BODY = '{"req_source": %d}' % REQ_SOURCE
 ALREADY_CODE = 9095                         # 今日已签
 QYWX_URL = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key='
 PUSHPLUS_URL = 'https://www.pushplus.plus/send'
@@ -405,11 +408,17 @@ def _post(url, headers, body='{}', timeout=30):
 
 
 def ug_headers(token, device_id):
-    # 签接口要求 16 位数字设备号，缺了会返回 9004(参数不正确)
+    # 与桌面端 _applyUgDeviceHeaders 对齐：缺这些设备头会被服务端拒成 9074
     headers = {'Authorization': 'Cloud-IDE-JWT ' + token, 'X-User-Region': 'CN',
                'User-Agent': UA, 'Content-Type': 'application/json'}
     if device_id:
-        headers['x-device-id'] = device_id   # 只发一个小写头，大小写同时发会被风控
+        headers['x-device-id'] = device_id
+    headers['x-device-type'] = platform.system() or 'Windows'
+    headers['x-os-version'] = platform.version() or '10.0.19045'
+    headers['x-app-version'] = IdeVersion
+    brand = os.getenv('TRAE_DEVICE_BRAND', '').strip()
+    if brand:
+        headers['x-device-brand'] = brand
     return headers
 
 
@@ -502,6 +511,20 @@ def save_device_ids(ids):
             json.dump(ids, fh, ensure_ascii=False, indent=2)
     except Exception as e:
         print('⚠️  [设备号] 持久化失败: %s' % e)
+
+
+def rotate_device_id(acc):
+    """9074 反复出现时换一个全新设备号：旧号会被服务端记住（越戳越黑），
+    实测换个新号立刻就能签成。新号按时间生成，保证与旧号不同并写回设备号文件。"""
+    key = _acct_key(acc)
+    ids = load_device_ids()
+    new_id = stable_device_id('%s:rotate:%d' % (key, int(time.time())))
+    ids[key] = new_id
+    save_device_ids(ids)
+    acc['deviceId'] = new_id
+    print('🔄 [设备号] %s 换新设备号 %s（旧号已被服务端记住）'
+          % (acc.get('_name') or acc.get('name') or key, new_id))
+    return new_id
 
 
 def device_id_for(acc, manual=''):
@@ -680,8 +703,9 @@ def load_accounts():
 
 # ══════════════════ 签到接口 ══════════════════
 def status_of(token, device_id):
-    """返回 (checked_in, credits, enable, code, raw)；查询不通时前三项为 None。"""
-    status, text = _post(EP_STATUS, ug_headers(token, device_id))
+    """返回 (checked_in, credits, enable, code, raw)；查询不通时前三项为 None。
+    请求体必须带 req_source（客户端同款），空体会被服务端拒成 9074。"""
+    status, text = _post(EP_STATUS, ug_headers(token, device_id), REQ_BODY)
     try:
         d = json.loads(text)
     except Exception:
@@ -695,7 +719,7 @@ def status_of(token, device_id):
 def claim(token, device_id):
     """签到领取积分一次，以业务 code 为准：0 成功 / 9095 今日已签 / 9074 限流可重试。
     返回 (http, code, message, 本次积分)。"""
-    status, text = _post(EP_CLAIM, ug_headers(token, device_id))
+    status, text = _post(EP_CLAIM, ug_headers(token, device_id), REQ_BODY)
     try:
         body = json.loads(text)
     except Exception:
@@ -883,6 +907,10 @@ def checkin_account(acc, cache):
 
     result['_claimed'] = True          # 只有真正发过 claim 才需要账号间错峰
     ok, code, msg, gained = claim_with_retry(acc, cache)
+    if code == RATE_CODE and os.getenv('TRAE_ROTATE', '1').strip() != '0':
+        # 9074 不是限流，是这个设备号被服务端记住了 —— 换个新号立刻能签（实测）
+        rotate_device_id(acc)
+        ok, code, msg, gained = claim_with_retry(acc, cache)
     if code == RATE_CODE:
         set_cooldown(_acct_key(acc), cooldown_minutes())
     if ok:
