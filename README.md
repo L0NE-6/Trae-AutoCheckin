@@ -130,7 +130,7 @@ python trae_sms_login.py --selftest
 # 2. 在「环境变量」里添加 TRAE_REFRESH_TOKEN_* 和 QYWX_TOKEN
 
 # 3. 新建定时任务（建议高频轻量，不硬打）
-python /ql/data/scripts/trae_checkin.py          # 定时: 7,37 * * * *
+python /ql/data/scripts/trae_checkin.py          # 早窗: 23 0 * * *  补签: 7,37 * * * *
 python /ql/data/scripts/trae_credit_monitor.py   # 定时: 0 * * * *
 ```
 
@@ -164,6 +164,7 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
 | `TRAE_BATCH` | ➖ | 每轮签几个账号，默认 **1**（按小时轮换）；`all` = 一轮全签 |
 | `TRAE_JITTER` | ➖ | 启动随机抖 0~20s 避开整点同秒，默认开；设 `0` 关闭 |
+| `TRAE_COOLDOWN_MIN` | ➖ | 9074 后单账号冷却分钟数，默认 **55**，冷却内零请求 |
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（抗限流，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
@@ -258,6 +259,10 @@ Trae 的签到接口有**按时间窗口**的排队限流，高峰期更容易�
 配合青龙定时高频轻量跑，加上当日状态文件自动跳过已签账号，
 全天多轮下来每个账号都能排到。**不要**把 `CLAIM_TRIES` 调大硬打，那样只会更糟。
 </details>
+
+> 💡 **实测结论（2026-09-14）**：9074 是服务端按「当前参与用户太多」做的容量门，
+> 换设备号 / 换出口 IP / 改请求头都绕不开；凌晨 00:15~00:45 连续签成，08 点后单发也 9074。
+> 所以把主力定时放在 `23 0 * * *`，其余时段每小时补签一次，命中 9074 就冷却 55 分钟。
 
 <details>
 <summary><b>为什么有两个脚本？</b></summary>
