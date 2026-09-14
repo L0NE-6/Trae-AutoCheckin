@@ -50,6 +50,8 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_PEAK_HOURS          早窗小时（可选，默认 0；支持 0 / 0,23 / 0-1）
   TRAE_PEAK_COOLDOWN_MIN   早窗内冷却分钟数（可选，默认 12）
   TRAE_CIRCUIT             设 1 恢复旧熔断：一个账号 9074 就全体收工（默认关）
+  TRAE_ROTATE              9074 后自动换新设备号（可选，默认开；设 0 关闭）
+  TRAE_DEVICE_BRAND        设备品牌请求头（可选，默认不发，对应桌面端 device_model）
   TRAE_UID[_N]             账号标识（可选，仅用于日志）
   TRAE_ONLY                只跑指定账号：序号 / uid / 名字（可选）
   CLAIM_TRIES              单轮 claim 重试次数（可选，默认 1，调大反而更容易被限）
