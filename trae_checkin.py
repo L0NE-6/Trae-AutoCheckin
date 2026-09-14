@@ -26,6 +26,9 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 熔断：任一账号命中限流，本轮剩余账号直接跳过，不一起拖进惩罚窗口
   • 当日状态文件 .trae_checkin_state.json —— 已签成功的账号后续运行零请求
   • HTTP 429/5xx 与 code=9074 同等对待；账号间真发过 claim 才错峰 12~25s
+  • 9074 命中后给该账号记 55 分钟冷却，冷却内零请求，到点再由 cron 补签
+  • 实测结论：换设备号 / 换出口 IP / 换请求头 都绕不开 9074（服务端按"当前
+    参与用户太多"做容量门），凌晨 0 点前后最容易签成，所以 cron 建议放在 00:23
   • 实测 00:00~00:10 是全天最高峰（整点所有人一起签），cron 别用 0 分；
     本脚本启动后再随机抖 0~20s，避免同一定时任务的多个部署互相撞车
   • 设备号优先用客户端真实号（storage.json 的 iCubeAuthInfo://icube-dc 键），拿不到才生成
@@ -40,6 +43,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_DEVICE_ID[_N]       设备号（可选；留空则优先用客户端真实设备号，再回退生成）
   TRAE_BATCH               每轮签几个账号（可选，默认 1 按小时轮换；all = 一轮全签）
   TRAE_JITTER              启动随机抖动（可选，默认开；设 0 关闭 0~20s 错峰等待）
+  TRAE_COOLDOWN_MIN        9074 后的单账号冷却分钟数（可选，默认 55）
   TRAE_UID[_N]             账号标识（可选，仅用于日志）
   TRAE_ONLY                只跑指定账号：序号 / uid / 名字（可选）
   CLAIM_TRIES              单轮 claim 重试次数（可选，默认 1，调大反而更容易被限）
@@ -58,8 +62,9 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
 
 🚀 使用方法（青龙面板）
   1. 脚本放入 /ql/data/scripts/，环境变量填好 TRAE_ACCOUNTS 与 QYWX_TOKEN
-  2. 定时任务：python /ql/data/scripts/trae_checkin.py   定时 7,37 * * * *
-     （避开 0 分整点高峰；默认每轮只签 1 个号，24 小时足够把全部账号轮完）
+  2. 定时任务：python /ql/data/scripts/trae_checkin.py
+     早窗主力：  23 0 * * *     ← 实测 00:15~00:45 连续签成，务必卡这个窗口
+     其余补签：  7,37 * * * *   ← 冷却到点的账号会被自动补上，签成了就不再请求
   3. 想一轮全签（多账号少、能接受慢一点）设 TRAE_BATCH=all，靠熔断+错峰兜底；
      积分查询另用 trae_credit_monitor.py
 
@@ -272,15 +277,18 @@ def today_str():
 
 
 def load_state():
-    """返回 {'date': 'YYYY-MM-DD', 'done': {key: {...}}}，跨天自动清空。"""
+    """返回 {'date': 'YYYY-MM-DD', 'done': {key: {...}}, 'cooldown': {key: 'YYYY-MM-DD HH:MM'}}。
+    跨天自动清空。"""
     try:
         with open(STATE_FILE, 'r', encoding='utf-8') as fh:
             st = json.load(fh)
-        if st.get('date') != today_str():
-            return {'date': today_str(), 'done': {}}
-        return st
     except Exception:
-        return {'date': today_str(), 'done': {}}
+        st = {}
+    if st.get('date') != today_str():
+        st = {'date': today_str(), 'done': {}, 'cooldown': {}}
+    st.setdefault('done', {})
+    st.setdefault('cooldown', {})
+    return st
 
 
 def mark_done(key, info):
@@ -291,6 +299,29 @@ def mark_done(key, info):
             json.dump(st, fh, ensure_ascii=False, indent=2)
     except Exception as e:
         print('⚠️  [状态] 写入失败:', e)
+
+
+def set_cooldown(key, minutes):
+    """9074 后给该账号记一个冷却时间：反正换设备号/换出口 IP 都没用（实测），
+    短时间反复戳只会刷屏，冷却到点再由 cron 补签。"""
+    st = load_state()
+    st['cooldown'][str(key)] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time() + minutes * 60))
+    try:
+        with open(STATE_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(st, fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print('⚠️  [冷却] 写入失败: %s' % e)
+
+
+def cooldown_left(key, state=None):
+    """返回该账号还剩多少秒冷却；没在冷却返回 0。"""
+    st = state if state is not None else load_state()
+    until = (st.get('cooldown') or {}).get(str(key)) or ''
+    try:
+        ts = time.mktime(time.strptime(until, '%Y-%m-%d %H:%M'))
+    except Exception:
+        return 0
+    return max(0, int(ts - time.time()))
 
 
 def _acct_key(acc):
@@ -817,6 +848,8 @@ def checkin_account(acc, cache):
 
     result['_claimed'] = True          # 只有真正发过 claim 才需要账号间错峰
     ok, code, msg, gained = claim_with_retry(acc, cache)
+    if code == RATE_CODE:
+        set_cooldown(_acct_key(acc), COOLDOWN_MIN)
     if ok:
         pts = credits_summary(acc)
         result['status'] = '签到成功'
@@ -856,8 +889,9 @@ def _fmt(v):
 
 
 # ══════════════════ 主流程 ══════════════════
-SOFT = ('待重试',)               # 限流类，下一轮 cron 会自动补签，不算失败
+SOFT = ('待重试',)               # 限流类，冷却到点由 cron 补签，不算失败
 DEAD = ('未开放', '鉴权失败')      # 需要人工处理
+COOLDOWN_MIN = 55                # 9074 冷却分钟数，实测 8 小时后仍未解除，那就一小时一试
 GAP_MIN, GAP_MAX = 12, 25        # 实测 25s 间隔可让相邻账号连续签到成功
 
 
@@ -878,9 +912,17 @@ def main():
                             'detail': '今日已完成（%s），跳过请求' % rec.get('at', '-')})
             print('☑️  [%s] 今日已签到，跳过' % (acc.get('_name') or acc.get('name') or key))
         else:
-            pending.append(acc)
+            left = cooldown_left(key)
+            if left > 0:
+                print('⏳ [冷却] %s 9074 冷却中，还剩 %d 分钟，本轮跳过'
+                      % (acc.get('_name') or acc.get('name') or key, (left + 59) // 60))
+            else:
+                pending.append(acc)
     if not pending:
-        print('✅ 全部账号今日均已完成，无需请求接口')
+        if any(cooldown_left(_acct_key(a)) > 0 for a in accounts):
+            print('⏳ 全部待签账号都在冷却中，等冷却到点由 cron 补签')
+        else:
+            print('✅ 全部账号今日均已完成，无需请求接口')
 
     batch = pick_batch(pending)
     if len(batch) < len(pending):
