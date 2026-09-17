@@ -114,13 +114,21 @@ def decrypt_storage_value(b64):
     return pt.rstrip(b"\x00").rstrip()
 
 def candidate_paths():
-    ad = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
-    for n in ("Trae CN", "TRAE SOLO CN", "TRAE SOLO"):
-        p = os.path.join(ad, n, "User", "globalStorage", "storage.json")
+    home = os.path.expanduser("~")
+    names = ("Trae CN", "TRAE SOLO CN", "TRAE SOLO", "Trae")
+    sub = ("User", "globalStorage", "storage.json")
+    ad = os.environ.get("APPDATA") or os.path.join(home, "AppData", "Roaming")
+    for n in names:
+        p = os.path.join(ad, n, *sub)
         if os.path.isfile(p): yield p
-    for n in (".trae-cn", ".trae"):
-        p = os.path.join(os.path.expanduser("~"), n, "User", "globalStorage", "storage.json")
+    lib = os.path.join(home, "Library", "Application Support")
+    for n in names:
+        p = os.path.join(lib, n, *sub)
         if os.path.isfile(p): yield p
+    for base in (home, os.path.join(home, ".config")):
+        for n in (".trae-cn", ".trae", "Trae CN", "TRAE SOLO CN"):
+            p = os.path.join(base, n, *sub)
+            if os.path.isfile(p): yield p
 
 def extract(path):
     s = json.load(open(path, encoding="utf-8"))
