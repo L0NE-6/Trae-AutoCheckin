@@ -196,6 +196,27 @@ def dc_device_id(storage):
     return ''
 
 
+def find_storage_json():
+    "“”自动探测桌面端 storage.json 路径（Windows / macOS / Linux），找不到返回 None。“”"
+    home = os.path.expanduser('~')
+    names = ('Trae CN', 'TRAE SOLO CN', 'TRAE SOLO', 'Trae')
+    sub = ('User', 'globalStorage', 'storage.json')
+    candidates = []
+    appdata = os.environ.get('APPDATA') or os.path.join(home, 'AppData', 'Roaming')
+    for n in names:
+        candidates.append(os.path.join(appdata, n, *sub))
+    lib = os.path.join(home, 'Library', 'Application Support')
+    for n in names:
+        candidates.append(os.path.join(lib, n, *sub))
+    for base in (home, os.path.join(home, '.config')):
+        for n in ('.trae-cn', '.trae', 'Trae CN', 'TRAE SOLO CN'):
+            candidates.append(os.path.join(base, n, *sub))
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
 def load_from_storage(storage_path):
     """返回 (解密后的登录凭据, 客户端真实设备号)。"""
     with open(storage_path, 'r', encoding='utf-8') as fh:
@@ -676,13 +697,16 @@ def load_accounts():
         return filter_only(apply_cache(accs))
 
     # 3) 单账号：环境变量直给
-    if os.getenv('TRAE_ACCESS_TOKEN') or os.getenv('TRAE_ICUBE_AUTH') or os.getenv('TRAE_STORAGE_PATH'):
+    storage_path = os.getenv('TRAE_STORAGE_PATH', '').strip()
+    if not storage_path:
+        storage_path = find_storage_json() or ''
+    if os.getenv('TRAE_ACCESS_TOKEN') or os.getenv('TRAE_ICUBE_AUTH') or storage_path:
         if os.getenv('TRAE_ICUBE_AUTH'):
             acc = normalize(json.loads(decrypt_storage_value(os.getenv('TRAE_ICUBE_AUTH').strip())),
                             '环境变量 TRAE_ICUBE_AUTH')
-        elif os.getenv('TRAE_STORAGE_PATH'):
-            d, real = load_from_storage(os.getenv('TRAE_STORAGE_PATH'))
-            acc = normalize(d, os.getenv('TRAE_STORAGE_PATH'), '', real)
+        elif storage_path:
+            d, real = load_from_storage(storage_path)
+            acc = normalize(d, storage_path, '', real)
         else:
             acc = {'accessToken': os.getenv('TRAE_ACCESS_TOKEN', ''),
                    'refreshToken': os.getenv('TRAE_REFRESH_TOKEN', ''),
