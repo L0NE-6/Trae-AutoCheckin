@@ -127,7 +127,7 @@ python trae_sms_login.py --selftest
 /ql/data/scripts/trae_checkin.py
 /ql/data/scripts/trae_credit_monitor.py
 
-# 2. 在「环境变量」里添加 TRAE_REFRESH_TOKEN_* 和 QYWX_TOKEN
+# 2. 在「环境变量」里添加 TRAE_ACCOUNTS 和 QYWX_TOKEN
 
 # 3. 新建定时任务（建议高频轻量，不硬打）
 python /ql/data/scripts/trae_checkin.py          # 早窗: 23 0 * * *  补签: 7,37 * * * *
@@ -137,13 +137,29 @@ python /ql/data/scripts/trae_credit_monitor.py   # 定时: 0 * * * *
 ### 方式二：本地运行
 
 ```bash
-export TRAE_REFRESH_TOKEN="你的 refreshToken"
-export TRAE_REFRESH_TOKEN_2="第 2 个账号的 refreshToken"   # 可选
+export TRAE_ACCOUNTS='[{"accessToken":"...","refreshToken":"...","uid":"账号1"},...]'
 export QYWX_TOKEN="你的企业微信机器人 key"  # 可选
 
 python trae_checkin.py          # 签到
 python trae_credit_monitor.py   # 查积分
 ```
+
+### 方式三：GitHub Actions（免费 · 无需服务器）
+
+1. Fork 本仓库（或直接使用你自己的仓库）
+2. 打开 **Settings → Secrets and variables → Actions**，添加两个 secret：
+
+   | Secret 名称 | 值 |
+   |---|---|
+   | `TRAE_ACCOUNTS` | 与青龙相同的 JSON 数组 |
+   | `QYWX_TOKEN` | 企业微信机器人 key |
+
+3. 打开 **Actions** 标签页，确认两个工作流已启用（默认自动启用）：
+   - **Trae Daily Checkin** — 每天北京时间 00:23 自动签到 + 可手动触发
+   - **Trae Credit Monitor** — 每小时自动查积分 + 可手动触发
+
+> 💡 手动测试：进入 Actions → 选一个工作流 → Run workflow → Run，
+> 日志里能看到每个号的签到/积分结果。
 
 ---
 
@@ -151,9 +167,8 @@ python trae_credit_monitor.py   # 查积分
 
 | 变量 | 必填 | 说明 |
 | :--- | :---: | :--- |
-| `TRAE_REFRESH_TOKEN` | ✅ | 第 1 个账号的 refreshToken |
-| `TRAE_REFRESH_TOKEN_2~_9` | ➖ | 第 2~9 个账号的 refreshToken |
-| `TRAE_ACCOUNTS` | ➖ | 多账号 JSON 数组（更灵活）：每号可给 `accessToken` / `refreshToken` / `icubeAuth` / `storagePath` |
+| `TRAE_ACCOUNTS` | ✅ | 多账号 JSON 数组（推荐）：每号可给 `accessToken` / `refreshToken` / `icubeAuth` / `storagePath` |
+| `TRAE_REFRESH_TOKEN[_N]` | ➖ | 旧部署兼容：refreshToken（无 TRAE_ACCOUNTS 时生效） |
 | `TRAE_ACCESS_TOKEN[_N]` | ➖ | 已有 accessToken 时直接给，省一次续期 |
 | `TRAE_ICUBE_AUTH` | ➖ | 桌面端加密凭据串，脚本自动解密（需 cryptography） |
 | `TRAE_STORAGE_PATH` | ➖ | 直接指向客户端 `storage.json`，自动解密取 token |
