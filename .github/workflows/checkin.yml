@@ -1,0 +1,38 @@
+name: Trae Daily Checkin
+
+on:
+  schedule:
+    # 北京时间 00:23（UTC 16:23 前一天），早窗容量最松
+    - cron: "23 16 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trae-checkin
+  cancel-in-progress: true
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run checkin (all accounts)
+        env:
+          TRAE_ACCOUNTS: ${{ secrets.TRAE_ACCOUNTS }}
+          QYWX_TOKEN: ${{ secrets.QYWX_TOKEN }}
+          TRAE_JITTER: "1"
+        run: python trae_checkin.py
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::warning::签到脚本执行失败，请检查 secrets 和日志"
