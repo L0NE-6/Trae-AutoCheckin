@@ -1,0 +1,33 @@
+name: Trae Credit Monitor
+
+on:
+  schedule:
+    # 北京时间每小时第 0 分（UTC 整点）
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trae-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run credit monitor
+        env:
+          TRAE_ACCOUNTS: ${{ secrets.TRAE_ACCOUNTS }}
+          QYWX_TOKEN: ${{ secrets.QYWX_TOKEN }}
+        run: python trae_credit_monitor.py
