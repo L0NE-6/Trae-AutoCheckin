@@ -320,6 +320,8 @@ Trae-AutoCheckin/
 
 **如果这个项目对你有帮助，欢迎点个 ⭐ Star 支持一下！**
 
+**遇到问题或想改进？欢迎提 [Issues](https://github.com/L0NE-6/Trae-AutoCheckin/issues) 或发 [Pull Request](https://github.com/L0NE-6/Trae-AutoCheckin/pulls) 🚀**
+
 Made with ❤️ by [L0NE-6](https://github.com/L0NE-6)
 
 </div>
