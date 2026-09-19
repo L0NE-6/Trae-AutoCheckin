@@ -241,6 +241,31 @@ def _cache_path():
     return TOKEN_CACHE_FILE
 
 
+def _harden_credentials(path):
+    """含凭据的文件权限收到 0600（Windows 无意义，跳过）。"""
+    if os.name != 'posix':
+        return
+    try:
+        os.chmod(path, 0o600)
+    except Exception:
+        pass
+
+
+def atomic_write_json(path, data):
+    """先写临时文件再 os.replace，进程被杀也不留半截 JSON。
+    状态文件一旦损坏会被 load_state 静默当成空状态，导致已签到的账号重复签到。"""
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d, exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, path)
+    _harden_credentials(path)
+
+
 def load_cache():
     try:
         with open(_cache_path(), 'r', encoding='utf-8') as fh:
@@ -252,14 +277,7 @@ def load_cache():
 
 def save_cache(cache):
     try:
-        path = _cache_path()
-        d = os.path.dirname(path)
-        if d and not os.path.isdir(d):
-            os.makedirs(d, exist_ok=True)
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as fh:
-            json.dump(cache, fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
+        atomic_write_json(_cache_path(), cache)
     except Exception as e:
         print('⚠️  [缓存] 写入失败:', e)
 
@@ -326,8 +344,7 @@ def mark_done(key, info):
     st = load_state()
     st['done'][str(key)] = info
     try:
-        with open(STATE_FILE, 'w', encoding='utf-8') as fh:
-            json.dump(st, fh, ensure_ascii=False, indent=2)
+        atomic_write_json(STATE_FILE, st)
     except Exception as e:
         print('⚠️  [状态] 写入失败:', e)
 
@@ -347,8 +364,7 @@ def set_cooldown(key, minutes):
     st = load_state()
     st['cooldown'][str(key)] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time() + minutes * 60))
     try:
-        with open(STATE_FILE, 'w', encoding='utf-8') as fh:
-            json.dump(st, fh, ensure_ascii=False, indent=2)
+        atomic_write_json(STATE_FILE, st)
     except Exception as e:
         print('⚠️  [冷却] 写入失败: %s' % e)
 
@@ -530,8 +546,7 @@ def load_device_ids():
 
 def save_device_ids(ids):
     try:
-        with open(DEVICE_ID_FILE, 'w', encoding='utf-8') as fh:
-            json.dump(ids, fh, ensure_ascii=False, indent=2)
+        atomic_write_json(DEVICE_ID_FILE, ids)
     except Exception as e:
         print('⚠️  [设备号] 持久化失败: %s' % e)
 
