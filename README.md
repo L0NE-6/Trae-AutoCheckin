@@ -122,16 +122,38 @@ python trae_sms_login.py --selftest
 
 ### 方式一：青龙面板（推荐）
 
+**① 一键订阅拉取（推荐，自动跟随更新）**
+
+在青龙「定时任务」里新建一条任务，命令填：
+
 ```bash
-# 1. 把两个脚本放入青龙 scripts 目录
+ql repo "https://github.com/L0NE-6/Trae-AutoCheckin.git" "trae_checkin.py|trae_credit_monitor.py" "" "" "main"
+```
+
+手动执行一次，脚本就会拉到 `/ql/repo/Trae-AutoCheckin/` 下，之后每次执行都会自动更新到最新版。
+
+**② 手动放置（不想用订阅时）**
+
+```bash
+# 把两个脚本放入青龙 scripts 目录
 /ql/data/scripts/trae_checkin.py
 /ql/data/scripts/trae_credit_monitor.py
+```
 
-# 2. 在「环境变量」里添加 TRAE_ACCOUNTS 和 QYWX_TOKEN
+**③ 添加环境变量**
 
-# 3. 新建定时任务（建议高频轻量，不硬打）
-python /ql/data/scripts/trae_checkin.py          # 早窗: 23 0 * * *  补签: 7,37 * * * *
-python /ql/data/scripts/trae_credit_monitor.py   # 定时: 0 * * * *
+在「环境变量」里添加 `TRAE_ACCOUNTS` 和 `QYWX_TOKEN`。
+
+**④ 新建签到任务**
+
+```bash
+# 订阅方式（路径在 repo 下）
+python /ql/repo/Trae-AutoCheckin/trae_checkin.py          # 早窗: 23 0 * * *  补签: 7,37 * * * *
+python /ql/repo/Trae-AutoCheckin/trae_credit_monitor.py   # 定时: 0 * * * *
+
+# 手动放置方式（路径在 scripts 下）
+python /ql/data/scripts/trae_checkin.py
+python /ql/data/scripts/trae_credit_monitor.py
 ```
 
 ### 方式二：本地运行
