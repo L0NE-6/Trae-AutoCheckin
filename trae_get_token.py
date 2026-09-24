@@ -17,9 +17,15 @@ Trae Token 提取器 · trae_get_token.py
   2. 运行：python trae_get_token.py
   3. 复制输出的 TRAE_REFRESH_TOKEN 值，填入青龙面板环境变量
 
+  多账号一键生成 TRAE_ACCOUNTS（推荐）：
+  python trae_get_token.py --accounts
+  会把「本机登录态 + 账号目录里的 trae-<uid>.json」合并成一个 JSON 数组打印出来，
+  整行复制进 TRAE_ACCOUNTS 环境变量即可，不用再手动拼 JSON。
+
 📌 说明
   • 只读取本机自己的客户端凭据，不联网、不上传，安全无风险。
-  • 多账号：在客户端依次登录每个账号并各运行一次本脚本即可。
+  • 多账号：在客户端依次登录每个账号，各跑一次 --accounts 就会累积到同一个数组里。
+  • 账号目录可用 TRAE_ACCOUNT_DIR 指定，默认扫当前目录和脚本所在目录的 trae-*.json。
 ────────────────────────────────────────────────────────────
 """
 import base64, hashlib, json, os, sys, re
@@ -111,6 +117,10 @@ def decrypt_storage_value(b64):
     h = hashlib.sha512(rb).digest()
     fh = hashlib.sha512(h + SALT_AES).digest()
     pt = aes128_cbc_decrypt(fh[:16], fh[16:32], enc)[64:]
+    # 桌面端写盘用 PKCS7 填充；老版本可能用零填充，两种都兼容
+    pad = pt[-1] if pt else 0
+    if 1 <= pad <= 16:
+        return pt[:-pad]
     return pt.rstrip(b"\x00").rstrip()
 
 def candidate_paths():
@@ -144,7 +154,85 @@ def extract(path):
             "uid": uid.group(1) if uid else None,
             "nickname": nick.group(1) if nick else None}
 
+def load_from_dir(d):
+    """扫描目录里的 trae-<uid>.json（账号凭据文件），取出可用账号。"""
+    out = []
+    if not d or not os.path.isdir(d):
+        return out
+    for fn in sorted(os.listdir(d)):
+        if not fn.endswith(".json") or not fn.startswith("trae-"):
+            continue
+        try:
+            o = json.load(open(os.path.join(d, fn), encoding="utf-8"))
+        except Exception:
+            continue
+        a = o.get("auth") or {}
+        if not a.get("refreshToken"):
+            continue
+        acc = o.get("account") or {}
+        uid = str(acc.get("uid") or "")
+        nick = str(acc.get("nickname") or "")
+        out.append({"accessToken": a.get("accessToken") or "",
+                    "refreshToken": a["refreshToken"],
+                    "uid": uid or nick or fn,
+                    "name": nick or uid or fn})
+    return out
+
+
+def accounts_mode():
+    """把本机登录态 + 账号目录里的 trae-*.json 合并成一个 TRAE_ACCOUNTS JSON。"""
+    entries, seen = [], set()
+
+    def add(rec):
+        key = rec.get("uid") or rec["refreshToken"][:24]
+        if not rec.get("refreshToken") or key in seen:
+            return
+        seen.add(key)
+        n = len(entries) + 1
+        rec.setdefault("uid", "账号%d" % n)
+        rec.setdefault("name", rec["uid"])
+        entries.append(rec)
+
+    for p in candidate_paths():
+        try:
+            r = extract(p)
+        except Exception as e:
+            print("[!] 解析失败 %s: %s" % (p, e), file=sys.stderr); continue
+        if not r or not r.get("refreshToken"):
+            continue
+        add({"accessToken": r.get("accessToken") or "",
+             "refreshToken": r["refreshToken"],
+             "uid": r.get("uid") or "",
+             "name": r.get("nickname") or r.get("uid") or ""})
+
+    dirs = [os.environ.get("TRAE_ACCOUNT_DIR", "").strip(),
+            os.getcwd(),
+            os.path.dirname(os.path.abspath(__file__))]
+    for d in dirs:
+        for rec in load_from_dir(d):
+            add(rec)
+
+    if not entries:
+        print("[X] 没找到任何可用账号。")
+        print("    请先在 Trae 客户端登录一次，或把 trae-<uid>.json 放到当前目录。")
+        return 1
+
+    line = json.dumps(entries, ensure_ascii=False, separators=(",", ":"))
+    print("=" * 64)
+    print("TRAE_ACCOUNTS  (共 %d 个账号，整行复制到环境变量)" % len(entries))
+    print("=" * 64)
+    for i, e in enumerate(entries, 1):
+        print("  %d) %s  UID %s" % (i, e.get("name") or "-", e.get("uid") or "-"))
+    print("-" * 64)
+    print(line)
+    print("=" * 64)
+    print("提示：换行会被 JSON 破坏，请整行复制（不要手动折行）。")
+    return 0
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1].lower() in ("--accounts", "-a", "accounts"):
+        return accounts_mode()
     found = False
     for p in candidate_paths():
         try:
@@ -163,6 +251,9 @@ def main():
     if not found:
         print("[X] 没找到可用的 refreshToken。")
         print("    请先打开 Trae 客户端并登录一次，再运行本脚本。")
+        print("    多账号一键生成：python trae_get_token.py --accounts")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
