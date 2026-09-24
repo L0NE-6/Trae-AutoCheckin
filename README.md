@@ -25,7 +25,7 @@
 | `trae_checkin.py` | 🎯 多账号每日签到，9074 自动换号，自动续期 + 推送 |
 | `trae_credit_monitor.py` | 📊 只读查询积分「已用 / 剩余」，绝不签到 |
 | `trae_sms_login.py` | 📲 手机号 + 短信验证码登录，直接换取 Token（免客户端） |
-| `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken（免抓包） |
+| `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken / 生成 TRAE_ACCOUNTS（免抓包） |
 
 纯 **Python 标准库**实现，**无需 pip 安装任何依赖**，可直接丢进青龙面板 / 本地 crontab / 任意定时任务运行。
 
@@ -70,7 +70,15 @@ python trae_get_token.py
 | :--- | :--- |
 | `TRAE_REFRESH_TOKEN` | 粘贴上面复制的那串 |
 
-**多账号**：在客户端依次登录每个账号，各运行一次 `trae_get_token.py`，
+**多账号**：直接运行下面这条，会自动把本机登录态和账号目录里的凭据合成一个 `TRAE_ACCOUNTS` 数组：
+
+```bash
+python trae_get_token.py --accounts
+```
+
+输出一行 JSON，整行复制到 `TRAE_ACCOUNTS` 环境变量即可（字段说明见下方「[TRAE_ACCOUNTS 怎么填](#-trae_accounts-怎么填新手必看)」）。
+
+也可以沿用旧写法：在客户端依次登录每个账号，各运行一次 `trae_get_token.py`，
 把得到的值分别填到 `TRAE_REFRESH_TOKEN`、`TRAE_REFRESH_TOKEN_2`、`TRAE_REFRESH_TOKEN_3` …
 
 ### 🔍 方式二：手动定位（了解原理可选）
@@ -217,6 +225,57 @@ python trae_credit_monitor.py   # 查积分
 
 ---
 
+## 📋 TRAE_ACCOUNTS 怎么填（新手必看）
+
+一个 **JSON 数组**，一个元素 = 一个账号。**最省事的是让脚本自动生成**：
+
+```bash
+# 自动扫描「本机 Trae 登录态 + 账号目录里的 trae-<uid>.json」，直接打印可用的一行 JSON
+python trae_get_token.py --accounts
+
+# 账号文件在别的目录时，指定一下
+TRAE_ACCOUNT_DIR="D:/trae账号信息" python trae_get_token.py --accounts
+```
+
+把打印出来的那一行**整行**复制进 `TRAE_ACCOUNTS` 就行，不用手动拼。
+
+### 字段说明
+
+| 字段 | 必填 | 说明 |
+| :--- | :---: | :--- |
+| `refreshToken` | ✅ | 账号的 refreshToken。**只给这一个也能跑**，脚本会自动换取 accessToken |
+| `accessToken` | ➖ | 有就直接用，省一次续期；没有脚本自动换 |
+| `uid` | ➖ | 账号标识，用于日志和缓存键；不填会用 `name` 或序号 |
+| `name` | ➖ | 备注名，只影响日志显示 |
+| `deviceId` | ➖ | 16 位设备号；不填会自动生成并持久化 |
+| `icubeAuth` | ➖ | 桌面端加密凭据串（自动解密，需 cryptography），可替代 refreshToken |
+| `storagePath` | ➖ | 直接给 `storage.json` 路径，脚本自己解密取 token |
+
+### 最小可用示例
+
+只有一个 refreshToken 也能直接跑（推荐先这样跑通）：
+
+```json
+[{"refreshToken":"第1个账号的refreshToken"},{"refreshToken":"第2个账号的refreshToken"}]
+```
+
+### 完整示例
+
+```json
+[{"accessToken":"eyJhbGciOi...","refreshToken":"AbCd...=.0123456789abcdef","uid":"账号1","name":"主号"},{"refreshToken":"XyZ...=.fedcba9876543210","uid":"账号2","name":"小号"}]
+```
+
+### ⚠️ 三个最容易踩的坑
+
+- 必须是**一行**，中间不能有换行（换行会让 JSON 解析失败）
+- 只能用**英文双引号** `"`，中文引号 `“”` 会报错
+- 最后一个 `}` 后面**不能有逗号**
+
+> 💡 填完在青龙里点一次「执行」，日志会打印每个账号的状态；有账号报错会单独提示，不影响其它账号。
+> 旧写法 `TRAE_REFRESH_TOKEN[_N]` 仍然兼容，两种任选其一，`TRAE_ACCOUNTS` 优先。
+
+---
+
 ## 🎛️ 运行模式
 
 | 模式 | 配置 | 行为 |
@@ -323,7 +382,8 @@ Trae-AutoCheckin/
 ├── trae_checkin.py             # 🎯 多账号签到（主脚本，9074 自动换号）
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 📲 短信验证码登录换 Token
-├── trae_get_token.py           # 🔑 refreshToken 一键提取（免抓包）
+├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
+├── .github/workflows/          # ⚙️ GitHub Actions（每日签到 / 每小时积分）
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
 ├── LICENSE                     # 📄 MIT
 └── README.md                   # 📖 本文件
