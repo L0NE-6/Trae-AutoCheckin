@@ -205,7 +205,7 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_UID[_N]` | ➖ | 账号标识，仅用于日志与缓存键 |
 | `TRAE_DEVICE_ID[_N]` | ➖ | 设备号；留空则优先用客户端真实设备号，再回退自动生成 |
 | `TRAE_TOKEN_CACHE` | ➖ | token 缓存路径，默认 `/ql/data/config/` 或脚本同目录 |
-| `TRAE_ACCOUNT_DIR` | ➖ | 回写轮换后 refreshToken 的账号 JSON 目录 |
+| `TRAE_ACCOUNT_DIR` | ➖ | 账号 JSON（`trae-<uid>.json`）所在目录：读取与回写都用它 |
 | `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
 | `TRAE_BATCH` | ➖ | 每轮签几个账号，默认 **all**（一轮全签）；设 `1` 按小时轮换 |
 | `TRAE_JITTER` | ➖ | 启动随机抖 0~20s 避开整点同秒，默认开；设 `0` 关闭 |
@@ -233,8 +233,8 @@ python trae_credit_monitor.py   # 查积分
 # 自动扫描「本机 Trae 登录态 + 账号目录里的 trae-<uid>.json」，直接打印可用的一行 JSON
 python trae_get_token.py --accounts
 
-# 账号文件在别的目录时，指定一下
-TRAE_ACCOUNT_DIR="D:/trae账号信息" python trae_get_token.py --accounts
+# 账号文件（trae-<uid>.json）在别的目录时，指定一下
+TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
 ```
 
 把打印出来的那一行**整行**复制进 `TRAE_ACCOUNTS` 就行，不用手动拼。
