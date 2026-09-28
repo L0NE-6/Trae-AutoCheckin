@@ -17,9 +17,13 @@ Trae CreditMonitor · Trae 积分余额监控
 📦 环境变量
 TRAE_ACCOUNTS            多账号 JSON 数组（推荐，与签到脚本共用同一个变量）
 TRAE_REFRESH_TOKEN       旧部署兼容：refreshToken（也支持 _2~_N 后缀多账号）
-  WECHAT_WEBHOOK           企业微信机器人 webhook 地址（可选，用于推送）
-  TRAE_TOKEN_CACHE         缓存文件路径（可选，默认 /ql/data/config/ 或脚本同目录）
-  TRAE_SAVE_DIR            账号 JSON 所在目录（可选，用于回写轮换后的 refreshToken）
+QYWX_TOKEN               企业微信机器人 key（可选，也兼容 WECHAT_WEBHOOK）
+TRAE_TOKEN_CACHE         缓存文件路径（可选，默认 /ql/data/config/ 或脚本同目录）
+TRAE_ACCOUNT_DIR         账号 JSON 所在目录（可选，用于回写轮换后的 refreshToken）
+TRAE_DEVICE_KEY_PEM      设备 ECDSA 私钥（新版续期必需，trae_get_token.py --export-keys 导出）
+TRAE_DEVICE_PUB_PEM      设备 ECDSA 公钥（新版续期必需，同上）
+TRAE_MACHINE_ID          设备 machineId（建议一起填）
+TRAE_DEVICE_ID           设备号（16 位，与上面三个配套）
 
 🔑 如何获取 refreshToken（新手必看，两步搞定）
   方式一：一键提取（推荐 · 免抓包）
@@ -52,8 +56,10 @@ UgHost = 'https://api.trae.cn'
 OAuthHost = 'https://api.trae.com.cn'
 ClientID = 'en1oxy7wnw8j9n'
 EP_EXCHANGE = OAuthHost + '/cloudide/api/v3/trae/oauth/ExchangeToken'
+EP_EXCHANGE_PROOF = UgHost + '/trae/api/v3/oauth/ExchangeToken'   # 新版：必须带设备证明
 EP_ENTITLE = UgHost + '/trae/api/v2/pay/user_current_entitlement_list'
 UA = 'Trae/1.0'
+IdeVersion = '1.107.1'
 AUTH_FAIL_CODES = (1001, 1002)
 
 
@@ -112,17 +118,178 @@ def ug_headers(token, device_id):
             'User-Agent': 'TraeCreditMonitor/1.0', 'Content-Type': 'application/json'}
 
 
+# ══════════════════ 设备证明（纯标准库 ECDSA P-256） ══════════════════
+# Trae 新版 ExchangeToken 要求带设备签名，缺了会返回 20405 Device proof required。
+P256_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
+P256_A = P256_P - 3
+P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
+P256_GX = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+P256_GY = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
+
+
+def _der_tlv(buf, i):
+    tag = buf[i]; i += 1
+    ln = buf[i]; i += 1
+    if ln & 0x80:
+        n = ln & 0x7f
+        ln = int.from_bytes(buf[i:i + n], 'big'); i += n
+    return tag, buf[i:i + ln], i + ln
+
+
+def _pem_der(pem):
+    body = ''.join(l.strip() for l in pem.splitlines() if '---' not in l)
+    return base64.b64decode(body)
+
+
+def ec_private_scalar(pem):
+    """从 PKCS#8 / SEC1 PEM 里取出 P-256 私钥标量。"""
+    der = _pem_der(pem)
+    try:
+        _, body, _ = _der_tlv(der, 0)
+        i = 0
+        _, _, i = _der_tlv(body, i)
+        _, _, i = _der_tlv(body, i)
+        _, octs, i = _der_tlv(body, i)
+        _, inner, _ = _der_tlv(octs, 0)
+        j = 0
+        _, _, j = _der_tlv(inner, j)
+        _, d, j = _der_tlv(inner, j)
+        return int.from_bytes(d, 'big')
+    except Exception:
+        _, body, _ = _der_tlv(der, 0)
+        i = 0
+        _, _, i = _der_tlv(body, i)
+        _, d, i = _der_tlv(body, i)
+        return int.from_bytes(d, 'big')
+
+
+def _ec_add(p1, p2):
+    if p1 is None:
+        return p2
+    if p2 is None:
+        return p1
+    x1, y1 = p1
+    x2, y2 = p2
+    if x1 == x2 and (y1 + y2) % P256_P == 0:
+        return None
+    if p1 == p2:
+        lam = (3 * x1 * x1 + P256_A) * pow(2 * y1, -1, P256_P) % P256_P
+    else:
+        lam = (y2 - y1) * pow(x2 - x1, -1, P256_P) % P256_P
+    x3 = (lam * lam - x1 - x2) % P256_P
+    return x3, (lam * (x1 - x3) - y1) % P256_P
+
+
+def _ec_mul(k, pt):
+    r = None
+    while k:
+        if k & 1:
+            r = _ec_add(r, pt)
+        pt = _ec_add(pt, pt)
+        k >>= 1
+    return r
+
+
+def _der_sig(r, s):
+    def enc(x):
+        b = x.to_bytes(32, 'big').lstrip(b'\x00') or b'\x00'
+        if b[0] & 0x80:
+            b = b'\x00' + b
+        return b'\x02' + bytes([len(b)]) + b
+    body = enc(r) + enc(s)
+    return b'\x30' + bytes([len(body)]) + body
+
+
+def ec_sign(pem, data):
+    """ECDSA P-256 / SHA-256 签名，返回 base64(DER)。低 s 归一化，与客户端一致。"""
+    d = ec_private_scalar(pem)
+    z = int.from_bytes(hashlib.sha256(data).digest(), 'big')
+    while True:
+        k = int.from_bytes(os.urandom(32), 'big') % (P256_N - 1) + 1
+        x1, _ = _ec_mul(k, (P256_GX, P256_GY))
+        r = x1 % P256_N
+        if r == 0:
+            continue
+        s = (pow(k, -1, P256_N) * (z + r * d)) % P256_N
+        if s == 0:
+            continue
+        if s > P256_N // 2:
+            s = P256_N - s
+        return base64.b64encode(_der_sig(r, s)).decode('ascii')
+
+
+def norm_pem(v):
+    """把环境变量里字面量的 \\n 还原成真换行（复制粘贴友好）。"""
+    v = (v or '').strip()
+    if '\\n' in v and '\n' not in v:
+        v = v.replace('\\n', '\n')
+    return v
+
+
+def env_device_keys():
+    """从环境变量取设备证明材料（新版续期必需）。"""
+    priv = norm_pem(os.getenv('TRAE_DEVICE_KEY_PEM', ''))
+    pub = norm_pem(os.getenv('TRAE_DEVICE_PUB_PEM', ''))
+    did = os.getenv('TRAE_DEVICE_ID', '').strip()
+    mid = os.getenv('TRAE_MACHINE_ID', '').strip()
+    if priv and pub and did:
+        return {'deviceId': did, 'privateKeyPem': priv, 'publicKeyPem': pub, 'machineId': mid}
+    return None
+
+
+def device_proof(path, refresh_token, keys):
+    """构造 (DeviceProof, DeviceInfo)，供新版 ExchangeToken 使用。"""
+    ts = int(time.time())
+    nonce = os.urandom(16).hex()
+    canonical = '\n'.join(['POST', path, ClientID, refresh_token, str(ts), nonce])
+    proof = {'Timestamp': ts, 'Nonce': nonce,
+             'Signature': ec_sign(keys['privateKeyPem'], canonical.encode('utf-8'))}
+    info = {'DeviceID': keys.get('deviceId') or '', 'MachineID': keys.get('machineId') or '',
+            'PlatformCode': 'SOLO_PC', 'DeviceType': 'PC',
+            'DeviceName': os.getenv('USERNAME', '') or 'user', 'DeviceModel': '',
+            'ClientVersion': IdeVersion, 'DevicePublicKey': keys['publicKeyPem'],
+            'DeviceBrand': '', 'DeviceCPU': '',
+            'OSInfo': platform.system() or 'Windows', 'OSVersion': platform.release() or ''}
+    return proof, info
+
+
 # ══════════════════ Token 工具 ══════════════════
-def refresh(refresh_token):
-    body = json.dumps({'ClientID': ClientID, 'RefreshToken': refresh_token, 'ClientSecret': '-', 'UserID': ''})
-    status, text = _post(EP_EXCHANGE, {'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': UA}, body)
+def refresh(refresh_token, keys=None):
+    """续期：新版接口要求设备证明，缺了会返回 20405 Device proof required。"""
+    if keys and keys.get('privateKeyPem') and keys.get('publicKeyPem'):
+        path = '/trae/api/v3/oauth/ExchangeToken'
+        try:
+            proof, info = device_proof(path, refresh_token, keys)
+        except Exception as e:
+            return None, None, '设备签名失败: %s' % e
+        body = json.dumps({'ClientID': ClientID, 'ClientSecret': '', 'RefreshToken': refresh_token,
+                           'DeviceInfo': info, 'DeviceProof': proof, 'IDEVersion': IdeVersion})
+        status, text = _post(EP_EXCHANGE_PROOF, {'Content-Type': 'application/json', 'x-cloudide-token': ''}, body)
+    else:
+        body = json.dumps({'ClientID': ClientID, 'RefreshToken': refresh_token, 'ClientSecret': '-', 'UserID': ''})
+        status, text = _post(EP_EXCHANGE, {'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': UA}, body)
     if status >= 400 or status < 0:
-        return None, None, 'refresh http=%s %s' % (status, text[:200])
+        return None, None, 'refresh http=%s %s' % (status, explain_refresh_err(text))
     try:
         res = json.loads(text)['Result']
         return res.get('Token'), res.get('RefreshToken'), 'ok'
     except Exception as e:
         return None, None, 'parse refresh: %s %s' % (e, text[:200])
+
+
+def explain_refresh_err(text):
+    """把 Trae 错误码翻译成人话。"""
+    try:
+        err = (json.loads(text).get('ResponseMetadata') or {}).get('Error') or {}
+        code = err.get('Code')
+        dirty = ((err.get('Data') or {}).get('__Message.error')) or err.get('Message') or ''
+    except Exception:
+        return text[:200]
+    hint = {20101: 'refreshToken 已失效或被轮换掉了，请重新提取',
+            10101: 'refreshToken 与客户端不匹配（被别处轮换过），请重新提取',
+            20405: '需设备证明：请配置 TRAE_DEVICE_KEY_PEM / TRAE_DEVICE_PUB_PEM / TRAE_DEVICE_ID',
+            }.get(code, '')
+    return 'code=%s %s%s' % (code, dirty, ('（%s）' % hint) if hint else '')
 
 
 def _jwt_exp(token):
@@ -196,8 +363,9 @@ def get_token(idx, rt_env, did_env, cache, force_refresh=False):
         if c and c not in cands:
             cands.append(c)
     last = 'no refreshToken'
+    keys = env_device_keys()
     for rt in cands:
-        new_at, new_rt, msg = refresh(rt)
+        new_at, new_rt, msg = refresh(rt, keys)
         if new_at:
             new_rt = new_rt or rt
             cache[key] = {'accessToken': new_at, 'refreshToken': new_rt, 'expiresAt': _jwt_exp(new_at) or 0, 'updatedAt': int(time.time())}
