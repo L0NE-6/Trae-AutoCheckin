@@ -27,6 +27,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
     （想恢复旧行为一个被限就全体收工，设 TRAE_CIRCUIT=1）
   • 当日状态文件 .trae_checkin_state.json —— 已签成功的账号后续运行零请求
   • HTTP 429/5xx 与 code=9074 同等对待；账号间真发过 claim 才错峰 12~25s
+  • 续期带设备证明（纯标准库 ECDSA P-256 签名）：新版 ExchangeToken 缺了会报 20405
   • 9074 反复出现 = 设备号被服务端记住，自动换新设备号立刻重签（实测有效）
   • 换号后仍 9074 才按账号记冷却（早窗 12 分钟 / 平时 55 分钟），冷却内零请求
   • 早窗(TRAE_PEAK_HOURS，默认 0 点)自动一轮全签，其余时段每小时轮 1 个
@@ -52,6 +53,9 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_CIRCUIT             设 1 恢复旧熔断：一个账号 9074 就全体收工（默认关）
   TRAE_ROTATE              9074 后自动换新设备号（可选，默认开；设 0 关闭）
   TRAE_DEVICE_BRAND        设备品牌请求头（可选，默认不发，对应桌面端 device_model）
+  TRAE_DEVICE_KEY_PEM      设备 ECDSA 私钥（新版续期必需，--export-keys 导出）
+  TRAE_DEVICE_PUB_PEM      设备 ECDSA 公钥（新版续期必需，同上）
+  TRAE_MACHINE_ID          设备 machineId（建议和上面一起填）
   TRAE_UID[_N]             账号标识（可选，仅用于日志）
   TRAE_ONLY                只跑指定账号：序号 / uid / 名字（可选）
   CLAIM_TRIES              单轮 claim 重试次数（可选，默认 1，调大反而更容易被限）
@@ -101,6 +105,7 @@ UA = 'Trae/%s' % IdeVersion
 EP_STATUS = UgHost + '/trae/api/v2/ug/checkin_credits/status'
 EP_CLAIM = UgHost + '/trae/api/v2/ug/checkin_credits/claim'
 EP_EXCHANGE = OAuthHost + '/cloudide/api/v3/trae/oauth/ExchangeToken'
+EP_EXCHANGE_PROOF = UgHost + '/trae/api/v3/oauth/ExchangeToken'   # 新版：必须带设备证明
 EP_ENTITLE = UgHost + '/trae/api/v2/pay/user_current_entitlement_list'
 AUTH_FAIL_CODES = (1001, 1002, 401, 403)    # 未认证 / token 失效 / 鉴权类 HTTP
 RATE_HTTP_CODES = (429, 500, 502, 503, 504)
@@ -241,31 +246,6 @@ def _cache_path():
     return TOKEN_CACHE_FILE
 
 
-def _harden_credentials(path):
-    """含凭据的文件权限收到 0600（Windows 无意义，跳过）。"""
-    if os.name != 'posix':
-        return
-    try:
-        os.chmod(path, 0o600)
-    except Exception:
-        pass
-
-
-def atomic_write_json(path, data):
-    """先写临时文件再 os.replace，进程被杀也不留半截 JSON。
-    状态文件一旦损坏会被 load_state 静默当成空状态，导致已签到的账号重复签到。"""
-    d = os.path.dirname(path)
-    if d and not os.path.isdir(d):
-        os.makedirs(d, exist_ok=True)
-    tmp = path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp, path)
-    _harden_credentials(path)
-
-
 def load_cache():
     try:
         with open(_cache_path(), 'r', encoding='utf-8') as fh:
@@ -277,7 +257,14 @@ def load_cache():
 
 def save_cache(cache):
     try:
-        atomic_write_json(_cache_path(), cache)
+        path = _cache_path()
+        d = os.path.dirname(path)
+        if d and not os.path.isdir(d):
+            os.makedirs(d, exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump(cache, fh, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
     except Exception as e:
         print('⚠️  [缓存] 写入失败:', e)
 
@@ -344,7 +331,8 @@ def mark_done(key, info):
     st = load_state()
     st['done'][str(key)] = info
     try:
-        atomic_write_json(STATE_FILE, st)
+        with open(STATE_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(st, fh, ensure_ascii=False, indent=2)
     except Exception as e:
         print('⚠️  [状态] 写入失败:', e)
 
@@ -364,7 +352,8 @@ def set_cooldown(key, minutes):
     st = load_state()
     st['cooldown'][str(key)] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time() + minutes * 60))
     try:
-        atomic_write_json(STATE_FILE, st)
+        with open(STATE_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(st, fh, ensure_ascii=False, indent=2)
     except Exception as e:
         print('⚠️  [冷却] 写入失败: %s' % e)
 
@@ -461,20 +450,215 @@ def ug_headers(token, device_id):
     return headers
 
 
+# ══════════════════ 设备证明（纯标准库 ECDSA P-256） ══════════════════
+# Trae 新版 ExchangeToken 要求带设备签名，缺了会返回 20405 Device proof required。
+P256_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
+P256_A = P256_P - 3
+P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
+P256_GX = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+P256_GY = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
+
+
+def _der_tlv(buf, i):
+    tag = buf[i]; i += 1
+    ln = buf[i]; i += 1
+    if ln & 0x80:
+        n = ln & 0x7f
+        ln = int.from_bytes(buf[i:i + n], 'big'); i += n
+    return tag, buf[i:i + ln], i + ln
+
+
+def _pem_der(pem):
+    body = ''.join(l.strip() for l in pem.splitlines() if '---' not in l)
+    return base64.b64decode(body)
+
+
+def ec_private_scalar(pem):
+    """从 PKCS#8 / SEC1 PEM 里取出 P-256 私钥标量。"""
+    der = _pem_der(pem)
+    try:
+        _, body, _ = _der_tlv(der, 0)
+        i = 0
+        _, _, i = _der_tlv(body, i)
+        _, _, i = _der_tlv(body, i)
+        _, octs, i = _der_tlv(body, i)
+        _, inner, _ = _der_tlv(octs, 0)
+        j = 0
+        _, _, j = _der_tlv(inner, j)
+        _, d, j = _der_tlv(inner, j)
+        return int.from_bytes(d, 'big')
+    except Exception:
+        _, body, _ = _der_tlv(der, 0)
+        i = 0
+        _, _, i = _der_tlv(body, i)
+        _, d, i = _der_tlv(body, i)
+        return int.from_bytes(d, 'big')
+
+
+def _ec_add(p1, p2):
+    if p1 is None:
+        return p2
+    if p2 is None:
+        return p1
+    x1, y1 = p1
+    x2, y2 = p2
+    if x1 == x2 and (y1 + y2) % P256_P == 0:
+        return None
+    if p1 == p2:
+        lam = (3 * x1 * x1 + P256_A) * pow(2 * y1, -1, P256_P) % P256_P
+    else:
+        lam = (y2 - y1) * pow(x2 - x1, -1, P256_P) % P256_P
+    x3 = (lam * lam - x1 - x2) % P256_P
+    return x3, (lam * (x1 - x3) - y1) % P256_P
+
+
+def _ec_mul(k, pt):
+    r = None
+    while k:
+        if k & 1:
+            r = _ec_add(r, pt)
+        pt = _ec_add(pt, pt)
+        k >>= 1
+    return r
+
+
+def _der_sig(r, s):
+    def enc(x):
+        b = x.to_bytes(32, 'big').lstrip(b'\x00') or b'\x00'
+        if b[0] & 0x80:
+            b = b'\x00' + b
+        return b'\x02' + bytes([len(b)]) + b
+    body = enc(r) + enc(s)
+    return b'\x30' + bytes([len(body)]) + body
+
+
+def ec_sign(pem, data):
+    """ECDSA P-256 / SHA-256 签名，返回 base64(DER)。低 s 归一化，与客户端一致。"""
+    d = ec_private_scalar(pem)
+    z = int.from_bytes(hashlib.sha256(data).digest(), 'big')
+    while True:
+        k = int.from_bytes(os.urandom(32), 'big') % (P256_N - 1) + 1
+        x1, _ = _ec_mul(k, (P256_GX, P256_GY))
+        r = x1 % P256_N
+        if r == 0:
+            continue
+        s = (pow(k, -1, P256_N) * (z + r * d)) % P256_N
+        if s == 0:
+            continue
+        if s > P256_N // 2:
+            s = P256_N - s
+        return base64.b64encode(_der_sig(r, s)).decode('ascii')
+
+
+def local_device_keys():
+    """本机有桌面端时，从 storage.json 里取设备私钥/公钥/设备号/machineId。"""
+    sp = os.getenv('TRAE_STORAGE_PATH', '').strip() or find_storage_json()
+    if not sp or not os.path.isfile(sp):
+        return None
+    try:
+        with open(sp, 'r', encoding='utf-8') as fh:
+            storage = json.load(fh)
+        did = dc_device_id(storage)
+        if not did:
+            return None
+        env = storage.get('iCubeAuthInfo://icube-dc:%s' % did)
+        if not env:
+            return None
+        dev = json.loads(decrypt_storage_value(env.strip()))
+        priv = (dev.get('privateKeyPEM') or '').strip()
+        pub = (dev.get('publicKeyPEM') or '').strip()
+        if not (priv and pub):
+            return None
+        return {'deviceId': did, 'privateKeyPem': priv, 'publicKeyPem': pub,
+                'machineId': (storage.get('telemetry.machineId') or '').strip()}
+    except Exception:
+        return None
+
+
+def norm_pem(v):
+    """把环境变量里字面量的 \\n 还原成真换行（复制粘贴友好）。"""
+    v = (v or '').strip()
+    if '\\n' in v and '\n' not in v:
+        v = v.replace('\\n', '\n')
+    return v
+
+
+def device_keys_for(acc):
+    """取设备证明材料：账号字段 > 环境变量 > 本机 storage.json，取不到返回 None。"""
+    priv = norm_pem(str(acc.get('deviceKeyPem') or '') or os.getenv('TRAE_DEVICE_KEY_PEM', ''))
+    pub = norm_pem(str(acc.get('devicePubPem') or '') or os.getenv('TRAE_DEVICE_PUB_PEM', ''))
+    did = str(acc.get('deviceId') or '').strip()
+    mid = str(acc.get('machineId') or '').strip() or os.getenv('TRAE_MACHINE_ID', '').strip()
+    if priv and pub and did:
+        return {'deviceId': did, 'privateKeyPem': priv, 'publicKeyPem': pub, 'machineId': mid}
+    local = local_device_keys()
+    if local and priv and pub:
+        local['privateKeyPem'] = priv
+        local['publicKeyPem'] = pub
+        return local
+    return local
+
+
+def device_proof(path, refresh_token, keys):
+    """构造 (DeviceProof, DeviceInfo)，供新版 ExchangeToken 使用。"""
+    ts = int(time.time())
+    nonce = os.urandom(16).hex()
+    canonical = '\n'.join(['POST', path, ClientID, refresh_token, str(ts), nonce])
+    proof = {'Timestamp': ts, 'Nonce': nonce,
+             'Signature': ec_sign(keys['privateKeyPem'], canonical.encode('utf-8'))}
+    info = {'DeviceID': keys.get('deviceId') or '', 'MachineID': keys.get('machineId') or '',
+            'PlatformCode': 'SOLO_PC', 'DeviceType': 'PC',
+            'DeviceName': os.getenv('USERNAME', '') or 'user', 'DeviceModel': '',
+            'ClientVersion': IdeVersion, 'DevicePublicKey': keys['publicKeyPem'],
+            'DeviceBrand': '', 'DeviceCPU': '',
+            'OSInfo': platform.system() or 'Windows', 'OSVersion': platform.release() or ''}
+    return proof, info
+
+
 # ══════════════════ Token 工具 ══════════════════
-def refresh(refresh_token):
-    """用 refreshToken 换新 accessToken；Trae 会同时轮换 refreshToken。"""
-    body = json.dumps({'ClientID': ClientID, 'RefreshToken': refresh_token,
-                       'ClientSecret': '-', 'UserID': ''})
-    status, text = _post(EP_EXCHANGE, {'Content-Type': 'application/json',
-                                       'Accept': 'application/json', 'User-Agent': UA}, body)
+def refresh(refresh_token, keys=None):
+    """用 refreshToken 换新 accessToken；Trae 会同时轮换 refreshToken。
+
+    新版接口要求带设备证明（DeviceProof + DeviceInfo），缺了会返回 20405；
+    这里优先走带证明的新端点，没有设备材料时退回旧端点（会失败但错误更清楚）。
+    """
+    if keys and keys.get('privateKeyPem') and keys.get('publicKeyPem'):
+        path = '/trae/api/v3/oauth/ExchangeToken'
+        try:
+            proof, info = device_proof(path, refresh_token, keys)
+        except Exception as e:
+            return None, None, '设备签名失败（检查设备私钥）: %s' % e
+        body = json.dumps({'ClientID': ClientID, 'ClientSecret': '', 'RefreshToken': refresh_token,
+                           'DeviceInfo': info, 'DeviceProof': proof, 'IDEVersion': IdeVersion})
+        status, text = _post(EP_EXCHANGE_PROOF, {'Content-Type': 'application/json',
+                                                 'x-cloudide-token': ''}, body)
+    else:
+        body = json.dumps({'ClientID': ClientID, 'RefreshToken': refresh_token,
+                           'ClientSecret': '-', 'UserID': ''})
+        status, text = _post(EP_EXCHANGE, {'Content-Type': 'application/json',
+                                           'Accept': 'application/json', 'User-Agent': UA}, body)
     if status >= 400 or status < 0:
-        return None, None, 'refresh http=%s %s' % (status, text[:200])
+        return None, None, 'refresh http=%s %s' % (status, _explain_refresh_err(text))
     try:
         res = json.loads(text)['Result']
         return res.get('Token'), res.get('RefreshToken'), 'ok'
     except Exception as e:
         return None, None, 'parse refresh: %s %s' % (e, text[:200])
+
+
+def _explain_refresh_err(text):
+    """把 Trae 的错误码翻译成人话，方便排错。"""
+    try:
+        err = (json.loads(text).get('ResponseMetadata') or {}).get('Error') or {}
+        code = err.get('Code')
+        dirty = ((err.get('Data') or {}).get('__Message.error')) or err.get('Message') or ''
+    except Exception:
+        return text[:200]
+    hint = {20101: 'refreshToken 已失效或被轮换掉了，请重新提取',
+            10101: 'refreshToken 与客户端不匹配（通常是被别处轮换过），请重新提取',
+            20405: '服务端要求设备证明：请配置 TRAE_DEVICE_KEY_PEM / TRAE_DEVICE_PUB_PEM / TRAE_DEVICE_ID',
+            }.get(code, '')
+    return 'code=%s %s%s' % (code, dirty, ('（%s）' % hint) if hint else '')
 
 
 def _jwt_exp(token):
@@ -490,7 +674,11 @@ def ensure_token(acc, cache):
     """accessToken 缺失时直接续期；返回 (ok, msg)。续期成功即回写缓存与账号文件。"""
     if not acc.get('refreshToken'):
         return False, '无 refreshToken，无法刷新'
-    new_at, new_rt, msg = refresh(acc['refreshToken'])
+    try:
+        keys = device_keys_for(acc)
+    except Exception:
+        keys = None
+    new_at, new_rt, msg = refresh(acc['refreshToken'], keys)
     if not new_at:
         return False, msg
     acc['accessToken'] = new_at
@@ -546,7 +734,8 @@ def load_device_ids():
 
 def save_device_ids(ids):
     try:
-        atomic_write_json(DEVICE_ID_FILE, ids)
+        with open(DEVICE_ID_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(ids, fh, ensure_ascii=False, indent=2)
     except Exception as e:
         print('⚠️  [设备号] 持久化失败: %s' % e)
 
