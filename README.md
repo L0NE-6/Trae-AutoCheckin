@@ -81,6 +81,29 @@ python trae_get_token.py --accounts
 也可以沿用旧写法：在客户端依次登录每个账号，各运行一次 `trae_get_token.py`，
 把得到的值分别填到 `TRAE_REFRESH_TOKEN`、`TRAE_REFRESH_TOKEN_2`、`TRAE_REFRESH_TOKEN_3` …
 
+### 🔐 设备密钥（新版续期必需，必读）
+
+Trae 在 2026-09 之后给 `ExchangeToken` 接口加了**设备签名**校验，
+不带设备证明会直接返回 `20405 Device proof required`，也就是最常见的「凭证续期失败」。
+
+一条命令导出全部需要的值：
+
+```bash
+python trae_get_token.py --export-keys
+```
+
+输出 4 个变量，复制到青龙环境变量 / GitHub Actions Secrets：
+
+| 变量名 | 说明 |
+| :--- | :--- |
+| `TRAE_DEVICE_KEY_PEM` | 设备 ECDSA 私钥（PEM，换行已写成 `\n`，整行复制即可） |
+| `TRAE_DEVICE_PUB_PEM` | 设备 ECDSA 公钥（同上） |
+| `TRAE_DEVICE_ID` | 设备号（16 位数字） |
+| `TRAE_MACHINE_ID` | 设备 machineId（建议一起填） |
+
+> 💡 同机多账号共用同一套设备密钥（和桌面端行为一致），不用每个账号一份。
+> 脚本用的是**纯标准库 ECDSA P-256**，不需要装 cryptography。
+
 ### 🔍 方式二：手动定位（了解原理可选）
 
 Trae 客户端把登录凭据加密后存在（Windows）：
@@ -215,6 +238,9 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_CIRCUIT` | ➖ | 设 `1` 恢复旧熔断：一个账号 9074 就全体收工（默认关） |
 | `TRAE_ROTATE` | ➖ | 9074 后自动换新设备号，默认开；设 `0` 关闭 |
 | `TRAE_DEVICE_BRAND` | ➖ | 设备品牌请求头（可选，默认不发，与桌面端 `device_model` 对应） |
+| `TRAE_DEVICE_KEY_PEM` | ✅ | **新版续期必需**：设备 ECDSA 私钥（`trae_get_token.py --export-keys` 导出） |
+| `TRAE_DEVICE_PUB_PEM` | ✅ | **新版续期必需**：设备 ECDSA 公钥（同上） |
+| `TRAE_MACHINE_ID` | ➖ | 设备 machineId（同一命令导出，建议一起填） |
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（换号才是正解，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
@@ -349,7 +375,16 @@ python trae_get_token.py
 <details>
 <summary><b>提示「凭证续期失败 / 401」怎么办？</b></summary>
 
-说明该账号的 refreshToken 链已被推进到失效节点，需要**重新登录 Trae 客户端并导出新的 refreshToken**。
+看日志里的错误码，对应三种情况：
+
+| 错误码 | 含义 | 怎么修 |
+| :--- | :--- | :--- |
+| `20405` | 服务端要求**设备证明** | 配置 `TRAE_DEVICE_KEY_PEM` / `TRAE_DEVICE_PUB_PEM` / `TRAE_DEVICE_ID`（`python trae_get_token.py --export-keys` 一键导出） |
+| `20101` | refreshToken 已失效或被轮换掉 | 重新登录 Trae 客户端，再跑一次 `trae_get_token.py --accounts` 导出新凭据 |
+| `10101` | refreshToken 与客户端不匹配 | 同上 —— 通常是这个 token 已被别处轮换过（**同一账号别在多个地方同时跑**） |
+
+> 💡 最省事的排查顺序：先确认设备密钥配好了（20405），再确认 token 是不是最新的（20101/10101）。
+> 脚本现在会在日志里直接把这三类错误翻译成中文提示。
 </details>
 
 <details>
