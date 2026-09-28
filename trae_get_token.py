@@ -22,6 +22,12 @@ Trae Token 提取器 · trae_get_token.py
   会把「本机登录态 + 账号目录里的 trae-<uid>.json」合并成一个 JSON 数组打印出来，
   整行复制进 TRAE_ACCOUNTS 环境变量即可，不用再手动拼 JSON。
 
+  导出设备密钥（新版续期必需）：
+  python trae_get_token.py --export-keys
+  会打印 TRAE_DEVICE_KEY_PEM / TRAE_DEVICE_PUB_PEM / TRAE_DEVICE_ID / TRAE_MACHINE_ID
+  四个值，填入青龙 / GitHub Actions 的环境变量或 Secrets 即可。
+  原因：Trae 新版 ExchangeToken 要求带设备签名，缺了会报 20405 Device proof required。
+
 📌 说明
   • 只读取本机自己的客户端凭据，不联网、不上传，安全无风险。
   • 多账号：在客户端依次登录每个账号，各跑一次 --accounts 就会累积到同一个数组里。
@@ -154,6 +160,57 @@ def extract(path):
             "uid": uid.group(1) if uid else None,
             "nickname": nick.group(1) if nick else None}
 
+def device_keys():
+    """从本机 storage.json 取设备私钥/公钥/设备号/machineId（新版续期用）。"""
+    for path in candidate_paths():
+        try:
+            s = json.load(open(path, encoding="utf-8"))
+        except Exception:
+            continue
+        did = ""
+        for k in s:
+            if k.startswith("iCubeAuthInfo://icube-dc:"):
+                d = k.split(":")[-1]
+                if d.isdigit():
+                    did = d
+                    break
+        if not did:
+            continue
+        enc = s.get("iCubeAuthInfo://icube-dc:%s" % did)
+        if not enc:
+            continue
+        try:
+            dev = json.loads(decrypt_storage_value(enc.strip()).decode("utf-8", "replace"))
+        except Exception:
+            continue
+        priv = (dev.get("privateKeyPEM") or "").strip()
+        pub = (dev.get("publicKeyPEM") or "").strip()
+        if priv and pub:
+            return {"deviceId": did, "privateKeyPem": priv, "publicKeyPem": pub,
+                    "machineId": (s.get("telemetry.machineId") or "").strip(), "from": path}
+    return None
+
+
+def export_keys_mode():
+    """打印新版续期所需的设备密钥环境变量。"""
+    k = device_keys()
+    if not k:
+        print("[X] 没找到设备密钥。请先在 Trae 客户端登录一次，再运行本脚本。")
+        return 1
+    print("=" * 64)
+    print("设备密钥（来源: %s）" % k["from"])
+    print("=" * 64)
+    print("TRAE_DEVICE_ID=%s" % k["deviceId"])
+    print("TRAE_MACHINE_ID=%s" % k["machineId"])
+    print()
+    print("TRAE_DEVICE_KEY_PEM=%s" % k["privateKeyPem"].replace("\n", "\\n"))
+    print()
+    print("TRAE_DEVICE_PUB_PEM=%s" % k["publicKeyPem"].replace("\n", "\\n"))
+    print("=" * 64)
+    print("提示：PEM 里的换行已写成 \\n，直接整行复制即可（脚本会自动还原）。")
+    return 0
+
+
 def load_from_dir(d):
     """扫描目录里的 trae-<uid>.json（账号凭据文件），取出可用账号。"""
     out = []
@@ -231,7 +288,10 @@ def accounts_mode():
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1].lower() in ("--accounts", "-a", "accounts"):
+    args = [a.lower() for a in sys.argv[1:]]
+    if args and args[0] in ("--export-keys", "--keys", "-k"):
+        return export_keys_mode()
+    if args and args[0] in ("--accounts", "-a", "accounts"):
         return accounts_mode()
     found = False
     for p in candidate_paths():
