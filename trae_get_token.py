@@ -211,6 +211,54 @@ def export_keys_mode():
     return 0
 
 
+def jwt_uid(token):
+    """从 accessToken 里解出 uid，用来判断 token 属于哪个账号。"""
+    try:
+        p = token.split(".")[1]
+        pad = "=" * (-len(p) % 4)
+        return str(json.loads(base64.urlsafe_b64decode(p + pad)).get("data", {}).get("id", ""))
+    except Exception:
+        return ""
+
+
+def cache_files():
+    """token 缓存的候选位置（与签到脚本保持一致）。"""
+    env = os.environ.get("TRAE_TOKEN_CACHE", "").strip()
+    if env:
+        yield env
+    here = os.path.dirname(os.path.abspath(__file__))
+    yield os.path.join("/ql/data/config", ".trae_token_cache.json")
+    yield os.path.join(here, ".trae_token_cache.json")
+    yield os.path.join(os.getcwd(), ".trae_token_cache.json")
+
+
+def load_cache_tokens():
+    """读 token 缓存，按 uid 归位。缓存里是最近一次续期的结果，通常比账号文件新。"""
+    out = {}
+    for p in cache_files():
+        if not os.path.isfile(p):
+            continue
+        try:
+            d = json.load(open(p, encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(d, dict):
+            continue
+        for v in d.values():
+            at = (v or {}).get("accessToken") or ""
+            rt = (v or {}).get("refreshToken") or ""
+            allow = (v or {}).get("expiresAt") or 0
+            if not (at and rt):
+                continue
+            u = jwt_uid(at)
+            if not u:
+                continue
+            old = out.get(u)
+            if not old or (allow or 0) > (old.get("expiresAt") or 0):
+                out[u] = {"accessToken": at, "refreshToken": rt, "expiresAt": allow}
+    return out
+
+
 def load_from_dir(d):
     """扫描目录里的 trae-<uid>.json（账号凭据文件），取出可用账号。"""
     out = []
@@ -239,6 +287,7 @@ def load_from_dir(d):
 def accounts_mode():
     """把本机登录态 + 账号目录里的 trae-*.json 合并成一个 TRAE_ACCOUNTS JSON。"""
     entries, seen = [], set()
+    seen_entries = {}
 
     def add(rec):
         key = rec.get("uid") or rec["refreshToken"][:24]
@@ -249,6 +298,7 @@ def accounts_mode():
         rec.setdefault("uid", "账号%d" % n)
         rec.setdefault("name", rec["uid"])
         entries.append(rec)
+        seen_entries[str(rec.get("uid"))] = rec
 
     for p in candidate_paths():
         try:
@@ -268,6 +318,17 @@ def accounts_mode():
     for d in dirs:
         for rec in load_from_dir(d):
             add(rec)
+
+    # 缓存里的 token 是最近一次续期的结果，通常比账号文件新 —— 覆盖掉旧的
+    upgraded = 0
+    for u, v in load_cache_tokens().items():
+        old = seen_entries.get(u)
+        if old:
+            old["accessToken"] = v["accessToken"]
+            old["refreshToken"] = v["refreshToken"]
+            upgraded += 1
+    if upgraded:
+        print("[i] 已用 token 缓存里的最新凭据覆盖 %d 个账号" % upgraded, file=sys.stderr)
 
     if not entries:
         print("[X] 没找到任何可用账号。")
