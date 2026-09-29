@@ -311,10 +311,13 @@ def apply_cache(accounts, cache=None):
                 rec = by_uid[key][1]
                 break
         if rec and rec.get('accessToken'):
-            a['accessToken'] = rec['accessToken']
-            if rec.get('refreshToken'):
-                a['refreshToken'] = rec['refreshToken']
-            hit += 1
+            # 只有缓存里的 token 比环境变量里的更新（有效期更大）才覆盖，
+            # 否则环境变量里刚换上的新 token 会被旧缓存顶回去。
+            if int(rec.get('expiresAt') or 0) >= _jwt_exp(a.get('accessToken') or ''):
+                a['accessToken'] = rec['accessToken']
+                if rec.get('refreshToken'):
+                    a['refreshToken'] = rec['refreshToken']
+                hit += 1
     if hit:
         print('🔁 [缓存] 已用上次续期的 token 覆盖 %d 个账号' % hit)
     return accounts
