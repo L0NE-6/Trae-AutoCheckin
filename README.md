@@ -161,6 +161,28 @@ python trae_sms_probe.py 138xxxxxxxx 139xxxxxxxx  # 也可以直接跟号码
 > 🛡️ 如果输出「触发滑块」，说明当前出口 IP 被判定为机房/代理 ——
 > 在 Clash 里把 `*.trae.cn` 设为 DIRECT，或临时关掉 TUN/系统代理再跑。
 
+### 🌐 被滑块拦住？用浏览器登录
+
+纯接口版（`trae_sms_login.py`）遇到风控会直接失败 —— 机房 / 代理 IP 一律要求滑块，
+而滑块是浏览器行为，脚本过不了。这时候用浏览器版：
+
+```bash
+python trae_browser_login.py
+```
+
+会弹出一个真实 Chromium，你在窗口里正常操作：
+
+1. 输手机号 → 点发送验证码（**有滑块就手动划一下**，这步正是纯接口版做不到的）
+2. 输 6 位验证码完成登录
+3. 脚本在后台监听网络响应，自动抓出 `accessToken` / `refreshToken`，
+   并打印可粘贴的账号 JSON
+
+登录态会缓存在 `~/.trae-browser-profile`，下次打开无需重新登录；
+想隔离会话用 `--profile D:/xxx`。
+
+> 需要 playwright：`pip install playwright && python -m playwright install chromium`
+> 本机已测：无头 / 可见两种模式都能正常拉起步并监听响应。
+
 ### ⚠️ 注意事项
 
 - 提取前请确保 **Trae 客户端已登录**，否则读不到凭据。
@@ -441,6 +463,7 @@ Trae-AutoCheckin/
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 📲 短信验证码登录换 Token
 ├── trae_sms_probe.py           # 🔎 批量探测手机号是否注册 Trae（多账号认号用）
+├── trae_browser_login.py       # 🌐 真实浏览器登录取 Token（滑块 IP 也能用）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
 ├── .github/workflows/          # ⚙️ GitHub Actions（每日签到 / 每小时积分）
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
