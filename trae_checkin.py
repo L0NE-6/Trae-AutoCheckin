@@ -857,9 +857,17 @@ def pick(d, *candidates):
 
 
 def normalize(d, src, name='', real=''):
+    """把各种来源的凭据统一成内部结构。
+
+    设备相关字段（deviceId / deviceKeyPem / devicePubPem / machineId）会原样带出来 ——
+    不同账号可能绑在不同机器上，续期时必须用**签发它的那台机器的设备密钥**。
+    """
     return {'accessToken': pick(d, 'accessToken', 'token', 'access_token'),
             'refreshToken': pick(d, 'refreshToken', 'refresh_token'),
             'deviceId': pick(d, 'deviceId', 'device_id'),
+            'deviceKeyPem': pick(d, 'deviceKeyPem', 'device_key_pem'),
+            'devicePubPem': pick(d, 'devicePubPem', 'device_pub_pem'),
+            'machineId': pick(d, 'machineId', 'machine_id'),
             'uid': str(pick(d, 'uid', 'userId', 'user_id')),
             '_src': src, '_name': name, '_realDid': real}
 
