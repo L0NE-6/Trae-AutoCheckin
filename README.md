@@ -92,7 +92,7 @@ Trae 在 2026-09 之后给 `ExchangeToken` 接口加了**设备签名**校验，
 python trae_get_token.py --export-keys
 ```
 
-输出 4 个变量，复制到青龙环境变量 / GitHub Actions Secrets：
+输出 4 个变量，复制到青龙环境变量：
 
 | 变量名 | 说明 |
 | :--- | :--- |
@@ -237,23 +237,6 @@ export QYWX_TOKEN="你的企业微信机器人 key"  # 可选
 python trae_checkin.py          # 签到
 python trae_credit_monitor.py   # 查积分
 ```
-
-### 方式三：GitHub Actions（免费 · 无需服务器）
-
-1. Fork 本仓库（或直接使用你自己的仓库）
-2. 打开 **Settings → Secrets and variables → Actions**，添加两个 secret：
-
-   | Secret 名称 | 值 |
-   |---|---|
-   | `TRAE_ACCOUNTS` | 与青龙相同的 JSON 数组 |
-   | `QYWX_TOKEN` | 企业微信机器人 key |
-
-3. 打开 **Actions** 标签页，确认两个工作流已启用（默认自动启用）：
-   - **Trae Daily Checkin** — 每天北京时间 00:23 自动签到 + 可手动触发
-   - **Trae Credit Monitor** — 每小时自动查积分 + 可手动触发
-
-> 💡 手动测试：进入 Actions → 选一个工作流 → Run workflow → Run，
-> 日志里能看到每个号的签到/积分结果。
 
 ---
 
@@ -465,7 +448,6 @@ Trae-AutoCheckin/
 ├── trae_sms_probe.py           # 🔎 批量探测手机号是否注册 Trae（多账号认号用）
 ├── trae_browser_login.py       # 🌐 真实浏览器登录取 Token（滑块 IP 也能用）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
-├── .github/workflows/          # ⚙️ GitHub Actions（每日签到 / 每小时积分）
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
 ├── LICENSE                     # 📄 MIT
 └── README.md                   # 📖 本文件
