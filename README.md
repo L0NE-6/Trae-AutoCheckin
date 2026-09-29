@@ -145,6 +145,22 @@ python trae_sms_login.py --selftest
 
 ---
 
+### 🔎 忘记某个 UID 是哪个手机号？
+
+用 `trae_sms_probe.py` 先筛一遍（只发码、不登录）：
+
+```bash
+python trae_sms_probe.py --file phones.txt        # 一行一个手机号
+python trae_sms_probe.py 13800138000 13900139000  # 也可以直接跟号码
+```
+
+输出会告诉你哪些号注册了 Trae，然后对注册过的号跑 `trae_sms_login.py`，
+它打印的「账号 UID」就能对上号了。
+
+> ⚠️ 已注册的号会真的收到一条验证码短信；未注册的返回 `1003`。
+> 🛡️ 如果输出「触发滑块」，说明当前出口 IP 被判定为机房/代理 ——
+> 在 Clash 里把 `*.trae.cn` 设为 DIRECT，或临时关掉 TUN/系统代理再跑。
+
 ### ⚠️ 注意事项
 
 - 提取前请确保 **Trae 客户端已登录**，否则读不到凭据。
@@ -424,6 +440,7 @@ Trae-AutoCheckin/
 ├── trae_checkin.py             # 🎯 多账号签到（主脚本，9074 自动换号）
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 📲 短信验证码登录换 Token
+├── trae_sms_probe.py           # 🔎 批量探测手机号是否注册 Trae（多账号认号用）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
 ├── .github/workflows/          # ⚙️ GitHub Actions（每日签到 / 每小时积分）
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
