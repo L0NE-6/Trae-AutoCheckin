@@ -204,7 +204,8 @@ def send_code_flow(s, mobile, verify_ticket=None, fp=None):
     if code in (None, 0):
         return True, r, ""
     if code == ERR_SLIDER:
-        return False, r, "风控要求滑动验证（当前出口 IP 被判定为高风险，通常是机房/代理 IP）。"
+        return False, r, ("风控要求滑动验证（当前出口 IP 被判定为高风险，通常是机房/代理 IP）。"
+                          "改用浏览器版可过：python trae_browser_login.py")
     if code == ERR_FREQ:
         return False, r, "该号码请求过于频繁，请稍后再试。"
     if code == ERR_MOBILE:
@@ -244,7 +245,10 @@ def login_one(mobile=None, code=None, verify_ticket=None, fp=None):
     if not ok:
         print(f"❌ 发送失败：{hint}")
         if hint.startswith("风控"):
-            print("   提示：请在【家庭/手机热点等真实网络】下运行本脚本，机房/代理 IP 会被强制滑块。")
+            print("   本脚本走纯接口，滑块过不了。两个办法：")
+            print("   ① 换真实网络：Clash 里把 *.trae.cn 设为 DIRECT，或临时关掉 TUN，或换手机热点")
+            print("   ② 直接用浏览器版（推荐，滑块手动划一下就过）：")
+            print("        python trae_browser_login.py")
         return None
     print("✅ 验证码已发送")
 
