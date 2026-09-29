@@ -283,14 +283,34 @@ def put_cache(cache, acc):
 
 
 def apply_cache(accounts, cache=None):
-    """用缓存里更新的 token 覆盖静态环境变量里的旧 token。"""
+    """用缓存里更新的 token 覆盖静态环境变量里的旧 token。
+
+    缓存里可能残留历史键（如 账号1 / 1 / uid 三种写法），所以按 accessToken 里的
+    uid 归位，同 uid 取有效期最大的那条 —— 否则旧键里的过期 token 会把新 token 覆盖掉。
+    """
     cache = load_cache() if cache is None else cache
     if not cache:
         return accounts
+    by_uid = {}
+    for k, rec in cache.items():
+        if not isinstance(rec, dict):
+            continue
+        at = rec.get('accessToken') or ''
+        rt = rec.get('refreshToken') or ''
+        if not (at and rt):
+            continue
+        u = _jwt_uid(at) or str(k)
+        exp = int(rec.get('expiresAt') or 0)
+        if u not in by_uid or exp > by_uid[u][0]:
+            by_uid[u] = (exp, rec)
     hit = 0
     for a in accounts:
-        rec = cache.get(_acct_key(a)) or {}
-        if rec.get('accessToken'):
+        rec = None
+        for key in (_acct_key(a), str(a.get('uid') or '').strip()):
+            if key and key in by_uid:
+                rec = by_uid[key][1]
+                break
+        if rec and rec.get('accessToken'):
             a['accessToken'] = rec['accessToken']
             if rec.get('refreshToken'):
                 a['refreshToken'] = rec['refreshToken']
@@ -672,6 +692,15 @@ def _explain_refresh_err(text):
             20403: '设备与 token 不匹配：确认设备密钥是从签发该 token 的同一台机器导出的',
             }.get(code, '')
     return 'code=%s %s%s' % (code, dirty, ('（%s）' % hint) if hint else '')
+
+
+def _jwt_uid(token):
+    try:
+        parts = token.split('.')
+        pad = parts[1] + '=' * (-len(parts[1]) % 4)
+        return str(json.loads(base64.urlsafe_b64decode(pad)).get('data', {}).get('id', ''))
+    except Exception:
+        return ''
 
 
 def _jwt_exp(token):
