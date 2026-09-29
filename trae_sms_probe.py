@@ -14,7 +14,7 @@ Trae 手机号探测器 · trae_sms_probe.py
 
 🚀 使用方法
   # 直接跟号码
-  python trae_sms_probe.py 13800138000 13900139000
+  python trae_sms_probe.py 138xxxxxxxx 139xxxxxxxx
 
   # 从文件读（一行一个，# 开头是注释）
   python trae_sms_probe.py --file phones.txt
@@ -95,7 +95,7 @@ def main():
 
     phones = load_phones(args)
     if not phones:
-        print("❌ 没给号码。用法：python trae_sms_probe.py 13800138000 13900139000")
+        print("❌ 没给号码。用法：python trae_sms_probe.py 138xxxxxxxx 139xxxxxxxx")
         print("        或：python trae_sms_probe.py --file phones.txt")
         return 1
 
