@@ -151,7 +151,7 @@ python trae_sms_login.py --selftest
 
 ```bash
 python trae_sms_probe.py --file phones.txt        # 一行一个手机号
-python trae_sms_probe.py 13800138000 13900139000  # 也可以直接跟号码
+python trae_sms_probe.py 138xxxxxxxx 139xxxxxxxx  # 也可以直接跟号码
 ```
 
 输出会告诉你哪些号注册了 Trae，然后对注册过的号跑 `trae_sms_login.py`，
