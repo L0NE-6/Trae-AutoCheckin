@@ -103,6 +103,9 @@ python trae_get_token.py --export-keys
 
 > 💡 同机多账号共用同一套设备密钥（和桌面端行为一致），不用每个账号一份。
 > 脚本用的是**纯标准库 ECDSA P-256**，不需要装 cryptography。
+>
+> ⚙️ 请求里的 `ClientID`（`ono9krqynydwx5`）和 `PlatformCode`（`IDE_PC`）已按**桌面端实测值**内置，
+> 并对旧 ClientID 做了自动回退，所以导出的 token 无论新旧都能续期，不需要你手动配。
 
 ### 🔍 方式二：手动定位（了解原理可选）
 
@@ -241,6 +244,9 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_DEVICE_KEY_PEM` | ✅ | **新版续期必需**：设备 ECDSA 私钥（`trae_get_token.py --export-keys` 导出） |
 | `TRAE_DEVICE_PUB_PEM` | ✅ | **新版续期必需**：设备 ECDSA 公钥（同上） |
 | `TRAE_MACHINE_ID` | ➖ | 设备 machineId（同一命令导出，建议一起填） |
+| `TRAE_CLIENT_ID` | ➖ | 客户端 ClientID，默认已内置桌面端实测值 `ono9krqynydwx5`；换 Trae 版本后才需要改 |
+| `TRAE_DEVICE_NAME` | ➖ | 设备名（默认取主机名） |
+| `TRAE_DEVICE_MODEL` | ➖ | 设备型号（可选，默认不发） |
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（换号才是正解，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
@@ -381,7 +387,8 @@ python trae_get_token.py
 | :--- | :--- | :--- |
 | `20405` | 服务端要求**设备证明** | 配置 `TRAE_DEVICE_KEY_PEM` / `TRAE_DEVICE_PUB_PEM` / `TRAE_DEVICE_ID`（`python trae_get_token.py --export-keys` 一键导出） |
 | `20101` | refreshToken 已失效或被轮换掉 | 重新登录 Trae 客户端，再跑一次 `trae_get_token.py --accounts` 导出新凭据 |
-| `10101` | refreshToken 与客户端不匹配 | 同上 —— 通常是这个 token 已被别处轮换过（**同一账号别在多个地方同时跑**） |
+| `10101` | refreshToken 与客户端不匹配 | 确认设备密钥是**从签发该 token 的同一台机器**导出的；仍报错就重新提取 token |
+| `20403` | token 与设备不匹配 | 同上 —— 这个 token 是在**另一台设备**上签发的，需要在那台机器上导出密钥，或重新登录取新 token |
 
 > 💡 最省事的排查顺序：先确认设备密钥配好了（20405），再确认 token 是不是最新的（20101/10101）。
 > 脚本现在会在日志里直接把这三类错误翻译成中文提示。
