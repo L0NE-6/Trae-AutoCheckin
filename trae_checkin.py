@@ -99,7 +99,8 @@ import base64, glob, hashlib, json, os, platform, random, sys, time, urllib.requ
 
 UgHost = 'https://api.trae.cn'
 OAuthHost = 'https://api.trae.com.cn'
-ClientID = 'en1oxy7wnw8j9n'
+ClientID = 'en1oxy7wnw8j9n'          # 旧客户端 / 旧 token 用
+ClientIDIde = os.getenv('TRAE_CLIENT_ID', '').strip() or 'ono9krqynydwx5'   # 桌面端实测值（新版续期必须）
 IdeVersion = '1.107.1'
 UA = 'Trae/%s' % IdeVersion
 EP_STATUS = UgHost + '/trae/api/v2/ug/checkin_credits/status'
@@ -599,18 +600,19 @@ def device_keys_for(acc):
     return local
 
 
-def device_proof(path, refresh_token, keys):
+def device_proof(path, refresh_token, keys, client_id=None):
     """构造 (DeviceProof, DeviceInfo)，供新版 ExchangeToken 使用。"""
     ts = int(time.time())
     nonce = os.urandom(16).hex()
-    canonical = '\n'.join(['POST', path, ClientID, refresh_token, str(ts), nonce])
+    canonical = '\n'.join(['POST', path, client_id or ClientID, refresh_token, str(ts), nonce])
     proof = {'Timestamp': ts, 'Nonce': nonce,
              'Signature': ec_sign(keys['privateKeyPem'], canonical.encode('utf-8'))}
     info = {'DeviceID': keys.get('deviceId') or '', 'MachineID': keys.get('machineId') or '',
-            'PlatformCode': 'SOLO_PC', 'DeviceType': 'PC',
-            'DeviceName': os.getenv('USERNAME', '') or 'user', 'DeviceModel': '',
+            'PlatformCode': 'IDE_PC', 'DeviceType': 'PC',
+            'DeviceName': os.getenv('TRAE_DEVICE_NAME', '').strip() or platform.node() or 'PC',
+            'DeviceModel': os.getenv('TRAE_DEVICE_MODEL', '').strip(),
             'ClientVersion': IdeVersion, 'DevicePublicKey': keys['publicKeyPem'],
-            'DeviceBrand': '', 'DeviceCPU': '',
+            'DeviceBrand': os.getenv('TRAE_DEVICE_BRAND', '').strip(), 'DeviceCPU': '',
             'OSInfo': platform.system() or 'Windows', 'OSVersion': platform.release() or ''}
     return proof, info
 
@@ -624,14 +626,24 @@ def refresh(refresh_token, keys=None):
     """
     if keys and keys.get('privateKeyPem') and keys.get('publicKeyPem'):
         path = '/trae/api/v3/oauth/ExchangeToken'
-        try:
-            proof, info = device_proof(path, refresh_token, keys)
-        except Exception as e:
-            return None, None, '设备签名失败（检查设备私钥）: %s' % e
-        body = json.dumps({'ClientID': ClientID, 'ClientSecret': '', 'RefreshToken': refresh_token,
-                           'DeviceInfo': info, 'DeviceProof': proof, 'IDEVersion': IdeVersion})
-        status, text = _post(EP_EXCHANGE_PROOF, {'Content-Type': 'application/json',
-                                                 'x-cloudide-token': ''}, body)
+        last = None
+        for cid in [ClientIDIde] + ([ClientID] if ClientID != ClientIDIde else []):
+            try:
+                proof, info = device_proof(path, refresh_token, keys, cid)
+            except Exception as e:
+                return None, None, '设备签名失败（检查设备私钥）: %s' % e
+            body = json.dumps({'ClientID': cid, 'ClientSecret': '', 'RefreshToken': refresh_token,
+                               'DeviceInfo': info, 'DeviceProof': proof, 'IDEVersion': IdeVersion})
+            status, text = _post(EP_EXCHANGE_PROOF, {'Content-Type': 'application/json',
+                                                     'x-cloudide-token': ''}, body)
+            if status < 400:
+                break
+            last = (status, text)
+            # 10101 不匹配 / 20403 设备不匹配 → 换另一个 ClientID 再试一次
+            if '10101' not in text and '20403' not in text:
+                break
+        else:
+            status, text = last or (status, text)
     else:
         body = json.dumps({'ClientID': ClientID, 'RefreshToken': refresh_token,
                            'ClientSecret': '-', 'UserID': ''})
@@ -657,6 +669,7 @@ def _explain_refresh_err(text):
     hint = {20101: 'refreshToken 已失效或被轮换掉了，请重新提取',
             10101: 'refreshToken 与客户端不匹配（通常是被别处轮换过），请重新提取',
             20405: '服务端要求设备证明：请配置 TRAE_DEVICE_KEY_PEM / TRAE_DEVICE_PUB_PEM / TRAE_DEVICE_ID',
+            20403: '设备与 token 不匹配：确认设备密钥是从签发该 token 的同一台机器导出的',
             }.get(code, '')
     return 'code=%s %s%s' % (code, dirty, ('（%s）' % hint) if hint else '')
 
