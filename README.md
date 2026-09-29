@@ -24,7 +24,7 @@
 | :--- | :--- |
 | `trae_checkin.py` | 🎯 多账号每日签到，9074 自动换号，自动续期 + 推送 |
 | `trae_credit_monitor.py` | 📊 只读查询积分「已用 / 剩余」，绝不签到 |
-| `trae_sms_login.py` | 📲 手机号 + 短信验证码登录，直接换取 Token（免客户端） |
+| `trae_sms_login.py` | 🌐 网页 OAuth 登录换 Token（真浏览器走官网，验证码/滑块无忧） |
 | `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken / 生成 TRAE_ACCOUNTS（免抓包） |
 
 纯 **Python 标准库**实现，**无需 pip 安装任何依赖**，可直接丢进青龙面板 / 本地 crontab / 任意定时任务运行。
@@ -42,7 +42,7 @@
 - 📅 **当日跳过** — 已签成功的账号后续运行零请求，不重复消耗
 - 📱 **稳定设备号** — 优先用客户端真实设备号，拿不到才按账号生成固定 16 位
 - 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
-- 📲 **短信登录** — 无需客户端，手机号 + 验证码直接换 Token
+- 🌐 **网页登录** — 真浏览器走官网 OAuth 拿 Token，验证码/滑块都在浏览器里完成
 - 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
 
 ---
@@ -119,69 +119,27 @@ Trae 客户端把登录凭据加密后存在（Windows）：
 解密算法（AES-128-CBC + SHA-512 校验）已内置在 `trae_get_token.py` 里，
 所以**直接跑脚本即可**，不用自己动手解密。
 
-### 📲 方式三：短信验证码登录（无需客户端）
+### 🌐 方式三：网页登录（OAuth · 真浏览器流程）
 
-不想装 Trae 客户端？用本仓库自带的 `trae_sms_login.py`，
-直接「手机号 + 短信验证码」走网页端真实登录流程换 Token，**零依赖**。
-
-```bash
-# 交互式（按提示输入手机号 → 收到的验证码）
-python trae_sms_login.py
-
-# 非交互 / 脚本调用
-python trae_sms_login.py -p 138xxxxxxxx -c 123456
-
-# 离线自检（不联网，仅验证混淆与编码）
-python trae_sms_login.py --selftest
-```
-
-运行后会打印 `accessToken` / `refreshToken`，并保存到 `trae_sms_accounts.json`，
-把其中的 `refreshToken` 填到环境变量即可。
-
-> ⚠️ **风控提示**：字节风控会对**机房 / 代理 / VPN IP** 强制弹滑块（错误码 `1105`）。
-> 请在**家庭宽带 / 手机热点**等真实网络下运行；脚本无法自动过滑块。
-> 若确实被要求滑块，可在真实浏览器过一次，把返回的 `verify_ticket`、`fp`
-> 用 `--ticket` / `--fp` 传入继续登录。
-
----
-
-### 🔎 忘记某个 UID 是哪个手机号？
-
-用 `trae_sms_probe.py` 先筛一遍（只发码、不登录）：
+不想装客户端 / 想给账号换新凭据？用 `trae_sms_login.py` 走 Trae 官网**真实网页登录**：
+脚本生成带 PKCE 的授权 URL 并打开浏览器，你正常登录（验证码 / 滑块都在官网页面完成），
+登录完成后脚本在本机接过回调，用 AuthCode 自动换取新凭据。
 
 ```bash
-python trae_sms_probe.py --file phones.txt        # 一行一个手机号
-python trae_sms_probe.py 138xxxxxxxx 139xxxxxxxx  # 也可以直接跟号码
+python trae_sms_login.py            # 打开浏览器 → 完成登录 → 终端打印新 token
+python trae_sms_login.py --solo     # SOLO 产品线（默认 Trae/IDE 线）
+python trae_sms_login.py --no-open  # 只打印授权 URL，自己手动打开
+python trae_sms_login.py --selftest # 离线自检（不联网、不占用端口）
 ```
 
-输出会告诉你哪些号注册了 Trae，然后对注册过的号跑 `trae_sms_login.py`，
-它打印的「账号 UID」就能对上号了。
+运行后会打印 `refreshToken` / `accessToken`（并保存到 `trae_sms_accounts.json`）。
 
-> ⚠️ 已注册的号会真的收到一条验证码短信；未注册的返回 `1003`。
-> 🛡️ 如果输出「触发滑块」，说明当前出口 IP 被判定为机房/代理 ——
-> 在 Clash 里把 `*.trae.cn` 设为 DIRECT，或临时关掉 TUN/系统代理再跑。
-
-### 🌐 被滑块拦住？用浏览器登录
-
-纯接口版（`trae_sms_login.py`）遇到风控会直接失败 —— 机房 / 代理 IP 一律要求滑块，
-而滑块是浏览器行为，脚本过不了。这时候用浏览器版：
-
-```bash
-python trae_browser_login.py
-```
-
-会弹出一个真实 Chromium，你在窗口里正常操作：
-
-1. 输手机号 → 点发送验证码（**有滑块就手动划一下**，这步正是纯接口版做不到的）
-2. 输 6 位验证码完成登录
-3. 脚本在后台监听网络响应，自动抓出 `accessToken` / `refreshToken`，
-   并打印可粘贴的账号 JSON
-
-登录态会缓存在 `~/.trae-browser-profile`，下次打开无需重新登录；
-想隔离会话用 `--profile D:/xxx`。
-
-> 需要 playwright：`pip install playwright && python -m playwright install chromium`
-> 本机已测：无头 / 可见两种模式都能正常拉起步并监听响应。
+> ⚠️ 需要本机装过一次 Trae 客户端：脚本从它的 `storage.json` 取**设备身份**
+> （device_id / 公钥 / machineId），与授权 URL 同源；回调端口固定 `17388`，
+> 被占提示时先退出 Trae 客户端再跑。
+>
+> ✅ 好处：不再直连短信接口 —— 机房 / 代理 IP 也不触发风控滑块，
+> 验证码和滑块都由你在浏览器里正常完成，换取的是可直接续期的 refreshToken。
 
 ### ⚠️ 注意事项
 
@@ -271,8 +229,6 @@ python trae_credit_monitor.py   # 查积分
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（换号才是正解，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
-| `TRAE_PHONE` | ➖ | 仅 `trae_sms_login.py`：手机号（免交互） |
-| `TRAE_SMS_CODE` | ➖ | 仅 `trae_sms_login.py`：短信验证码（免交互） |
 
 > 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
 
@@ -444,9 +400,7 @@ python trae_get_token.py
 Trae-AutoCheckin/
 ├── trae_checkin.py             # 🎯 多账号签到（主脚本，9074 自动换号）
 ├── trae_credit_monitor.py      # 📊 积分只读监控
-├── trae_sms_login.py           # 📲 短信验证码登录换 Token
-├── trae_sms_probe.py           # 🔎 批量探测手机号是否注册 Trae（多账号认号用）
-├── trae_browser_login.py       # 🌐 真实浏览器登录取 Token（滑块 IP 也能用）
+├── trae_sms_login.py           # 🌐 网页 OAuth 登录换 Token（真浏览器流程）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
 ├── LICENSE                     # 📄 MIT
