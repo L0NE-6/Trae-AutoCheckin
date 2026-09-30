@@ -238,7 +238,7 @@ def env_device_keys():
     return None
 
 
-def device_proof(path, refresh_token, keys, client_id=None):
+def device_proof(path, refresh_token, keys, client_id=None, platform_code='IDE_PC'):
     """构造 (DeviceProof, DeviceInfo)，供新版 ExchangeToken 使用。"""
     ts = int(time.time())
     nonce = os.urandom(16).hex()
@@ -246,7 +246,7 @@ def device_proof(path, refresh_token, keys, client_id=None):
     proof = {'Timestamp': ts, 'Nonce': nonce,
              'Signature': ec_sign(keys['privateKeyPem'], canonical.encode('utf-8'))}
     info = {'DeviceID': keys.get('deviceId') or '', 'MachineID': keys.get('machineId') or '',
-            'PlatformCode': 'IDE_PC', 'DeviceType': 'PC',
+            'PlatformCode': platform_code, 'DeviceType': 'PC',
             'DeviceName': os.getenv('TRAE_DEVICE_NAME', '').strip() or platform.node() or 'PC',
             'DeviceModel': os.getenv('TRAE_DEVICE_MODEL', '').strip(),
             'ClientVersion': IdeVersion, 'DevicePublicKey': keys['publicKeyPem'],
@@ -262,9 +262,17 @@ def refresh(refresh_token, keys=None):
         path = '/trae/api/v3/oauth/ExchangeToken'
         last = None
         import json as _json
-        for cid in [ClientIDIde] + ([ClientID] if ClientID != ClientIDIde else []):
+        # (ClientID, PlatformCode) 组合链：
+        #   ① 桌面端实测钥匙 + IDE_PC（TRAE 线）
+        #   ② 旧 ClientID + IDE_PC（旧 token 兜底）
+        #   ③ SOLO 线：en1oxy7wnw8j9n + SOLO_PC（TRAE SOLO 客户端签发的 token）
+        combos = [(ClientIDIde, 'IDE_PC')]
+        for pair in ((ClientID, 'IDE_PC'), (ClientID, 'SOLO_PC')):
+            if pair not in combos:
+                combos.append(pair)
+        for cid, pcode in combos:
             try:
-                proof, info = device_proof(path, refresh_token, keys, cid)
+                proof, info = device_proof(path, refresh_token, keys, cid, pcode)
             except Exception as e:
                 return None, None, '设备签名失败: %s' % e
             body = _json.dumps({'ClientID': cid, 'ClientSecret': '', 'RefreshToken': refresh_token,
@@ -298,7 +306,7 @@ def explain_refresh_err(text):
     except Exception:
         return text[:200]
     hint = {20101: 'refreshToken 已失效或被轮换掉了，请重新提取',
-            10101: 'refreshToken 与客户端不匹配（被别处轮换过），请重新提取',
+            10101: 'refreshToken 与客户端不匹配（可能被别处轮换过、或来自另一条产品线的客户端），请重新提取',
             20405: '需设备证明：请配置 TRAE_DEVICE_KEY_PEM / TRAE_DEVICE_PUB_PEM / TRAE_DEVICE_ID',
             20403: '设备与 token 不匹配：确认设备密钥来自签发该 token 的同一台机器',
             }.get(code, '')
