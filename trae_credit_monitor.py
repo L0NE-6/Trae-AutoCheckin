@@ -356,27 +356,33 @@ def persist_refresh_token(uid, new_rt, seed_rt):
             return
 
 
-def get_token(idx, rt_env, did_env, cache, force_refresh=False):
+def get_token(idx, rt_env, did_env, cache, force_refresh=False, keys=None, at_env=''):
     key = str(idx)
     did = did_env or stable_device_id(rt_env)
     ent = cache.get(key) or {}
     at = ent.get('accessToken')
     rt_cache = ent.get('refreshToken')
     exp = ent.get('expiresAt') or 0
-    if at and not force_refresh:
-        if exp and exp - 60 > time.time():
-            return at, did, (rt_cache or rt_env), None
-        if token_ok(at, did):
-            real_exp = _jwt_exp(at)
-            if real_exp and real_exp != exp:
-                cache[key] = {'accessToken': at, 'refreshToken': rt_cache or rt_env, 'expiresAt': real_exp, 'updatedAt': int(time.time())}
-            return at, did, (rt_cache or rt_env), None
+    # 环境变量里的 token 比缓存新时就先用它（缓存里可能残留旧链里已失效的 token）
+    at_use, rt_use, exp_use = at, (rt_cache or rt_env), exp
+    if at_env:
+        e_env = _jwt_exp(at_env)
+        if e_env > exp_use:
+            at_use, rt_use, exp_use = at_env, rt_env, e_env
+    if at_use and not force_refresh:
+        if exp_use and exp_use - 60 > time.time():
+            return at_use, did, rt_use, None
+        if token_ok(at_use, did):
+            real_exp = _jwt_exp(at_use)
+            if real_exp and real_exp != exp_use:
+                cache[key] = {'accessToken': at_use, 'refreshToken': rt_use, 'expiresAt': real_exp, 'updatedAt': int(time.time())}
+            return at_use, did, rt_use, None
     cands = []
     for c in (rt_cache, rt_env):
         if c and c not in cands:
             cands.append(c)
     last = 'no refreshToken'
-    keys = env_device_keys()
+    keys = keys or env_device_keys()
     for rt in cands:
         new_at, new_rt, msg = refresh(rt, keys)
         if new_at:
@@ -454,7 +460,16 @@ def load_accounts():
             label = a.get('name') or a.get('uid') or '账号%d' % idx
             if only and only not in (str(idx), str(a.get('uid', '')), label):
                 continue
-            accounts.append((idx, rt, a.get('deviceId', '').strip(), label))
+            # 设备证明材料：优先账号自带的（不同账号可能绑在不同机器上），
+            # 拿不到时由 get_token 回落到环境变量里那套通用密钥。
+            priv = norm_pem(a.get('deviceKeyPem', ''))
+            pub = norm_pem(a.get('devicePubPem', ''))
+            did = a.get('deviceId', '').strip()
+            keys = None
+            if priv and pub and did:
+                keys = {'deviceId': did, 'privateKeyPem': priv, 'publicKeyPem': pub,
+                        'machineId': (a.get('machineId') or '').strip()}
+            accounts.append((idx, rt, did, label, keys, (a.get('accessToken') or '').strip()))
         if accounts:
             return accounts
     only = os.environ.get('TRAE_ONLY', '').strip()
@@ -468,13 +483,13 @@ def load_accounts():
         label = '账号%d' % i
         if only and only not in (str(i), label):
             continue
-        accounts.append((i, rt, did, label))
+        accounts.append((i, rt, did, label, None, ''))
     return accounts
 
 
 def iter_accts():
-    for idx, rt, did, label in load_accounts():
-        yield idx, rt, did, label
+    for idx, rt, did, label, keys, at_env in load_accounts():
+        yield idx, rt, did, label, keys, at_env
 
 
 def main():
@@ -490,15 +505,15 @@ def main():
     cache = load_cache()
     ok, fail = [], []
     out = ['📊 Trae 积分监控', '🕒 ' + bj()]
-    for i, (idx, rt, did, label) in enumerate(accts):
+    for i, (idx, rt, did, label, keys, at_env) in enumerate(accts):
         name = label if label else '账号%d' % idx
-        token, did, new_rt, err = get_token(idx, rt, did, cache)
+        token, did, new_rt, err = get_token(idx, rt, did, cache, keys=keys, at_env=at_env)
         if not token:
             print('❌ [%s] 凭证续期失败: %s' % (name, err))
             fail.append(name + ' 凭证续期失败'); out.append('❌ %s：凭证续期失败' % name); continue
         cs = credits_summary(token, did)
         if cs and cs.get('code') in AUTH_FAIL_CODES:
-            token, did, new_rt, err = get_token(idx, rt, did, cache, force_refresh=True)
+            token, did, new_rt, err = get_token(idx, rt, did, cache, force_refresh=True, keys=keys, at_env=at_env)
             cs = credits_summary(token, did) if token else None
         if not cs or cs.get('total') is None:
             print('❌ [%s] 查询失败' % name)
