@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=social)](https://github.com/L0NE-6/Trae-AutoCheckin)
 
-[✨ 特性](#-特性) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 配置](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题)
+[✨ 特性](#-特性) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 配置](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题) · [☕ 投喂](#-投喂支持)
 
 </div>
 
@@ -403,10 +403,30 @@ Trae-AutoCheckin/
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 🌐 网页 OAuth 登录换 Token（真浏览器流程）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
+├── assets/donate/              # ☕ 投喂收款码（支付宝 / 微信）
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
 ├── LICENSE                     # 📄 MIT
 └── README.md                   # 📖 本文件
 ```
+
+---
+
+## ☕ 投喂支持
+
+如果这个项目帮到了你，可以请作者喝杯咖啡，感谢支持！
+
+<div align="center">
+<table>
+<tr>
+<th align="center">支付宝</th>
+<th align="center">微信支付</th>
+</tr>
+<tr>
+<td align="center"><img src="assets/donate/alipay.jpg" width="320" alt="支付宝收款码"></td>
+<td align="center"><img src="assets/donate/wechat.jpg" width="320" alt="微信收款码"></td>
+</tr>
+</table>
+</div>
 
 ---
 
