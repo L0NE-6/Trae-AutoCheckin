@@ -71,6 +71,10 @@ python trae_get_token.py
 | :--- | :--- |
 | `TRAE_REFRESH_TOKEN` | 粘贴上面复制的那串 |
 
+> ⚠️ **单账号只填 `TRAE_REFRESH_TOKEN` 就够了**（脚本会自动换取 accessToken）。
+> `TRAE_ACCESS_TOKEN` 和 `TRAE_REFRESH_TOKEN` 是**两串不同的值**：accessToken 是 `eyJ` 开头的长 JWT，refreshToken 形如 `xxx=.18dxxx`。
+> 两个填成同一个值会直接报「鉴权失败（硬失败）」——新版脚本会提前拦截并提示，不会白跑一轮。
+
 **多账号**：直接运行下面这条，会自动把本机登录态和账号目录里的凭据合成一个 `TRAE_ACCOUNTS` 数组：
 
 ```bash
@@ -233,6 +237,9 @@ python trae_credit_monitor.py   # 查积分
 
 > 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
 
+> 🔐 **两个 token 不要混用**：`TRAE_ACCESS_TOKEN`（`eyJ...` 长 JWT）与 `TRAE_REFRESH_TOKEN`（`xxx=.18dxxx`）是不同凭证。
+> 单账号推荐只填 `TRAE_REFRESH_TOKEN`；两个填成一样、或者填反，脚本会在启动时明确报错。
+
 ---
 
 ## 📋 TRAE_ACCOUNTS 怎么填（新手必看）
@@ -354,6 +361,18 @@ python trae_get_token.py
 终端会直接打印出 `TRAE_REFRESH_TOKEN = xxx`，复制到青龙环境变量即可。
 该脚本会自动定位并解密客户端凭据，免抓包、零依赖。
 详见 [🔑 获取 refreshToken](#-获取-refreshtoken新手必看)。
+</details>
+
+<details>
+<summary><b>提示「鉴权失败（硬失败）」怎么办？</b></summary>
+
+先检查两个 token 是不是配错了：
+
+| 常见错法 | 现象 | 正确做法 |
+| :--- | :--- | :--- |
+| `TRAE_ACCESS_TOKEN` 和 `TRAE_REFRESH_TOKEN` 填成同一个值 | 续期必失败 → 硬失败 | 单账号只填 `TRAE_REFRESH_TOKEN`，或用 `trae_get_token.py` 重新提取后分别填 |
+| 两个变量填反 | 同样续期失败 | accessToken 以 `eyJ` 开头；refreshToken 形如 `xxx=.18dxxx` |
+| 在服务器上手拼 token | 值不完整/抄错 | 在登录着 Trae 客户端的电脑上运行 `python trae_get_token.py`，整串复制 |
 </details>
 
 <details>

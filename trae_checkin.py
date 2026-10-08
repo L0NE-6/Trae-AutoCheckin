@@ -942,6 +942,8 @@ def load_accounts():
             data = json.loads(raw_list)
         except Exception as e:
             print('❌ [凭据] TRAE_ACCOUNTS 不是合法 JSON: %s' % e, file=sys.stderr)
+            print('   格式示例: [{"refreshToken":"AbCd...0000","uid":"账号1"}]', file=sys.stderr)
+            print('   注意用英文双引号；推荐运行 trae_get_token.py --accounts 自动生成整行。', file=sys.stderr)
             sys.exit(1)
         data = [data] if isinstance(data, dict) else data
         accounts = []
@@ -973,8 +975,20 @@ def load_accounts():
             d, real = load_from_storage(storage_path)
             acc = normalize(d, storage_path, '', real)
         else:
-            acc = {'accessToken': os.getenv('TRAE_ACCESS_TOKEN', ''),
-                   'refreshToken': os.getenv('TRAE_REFRESH_TOKEN', ''),
+            access_token = os.getenv('TRAE_ACCESS_TOKEN', '').strip()
+            refresh_token = os.getenv('TRAE_REFRESH_TOKEN', '').strip()
+            if access_token and refresh_token and access_token == refresh_token:
+                print('❌ [凭据] TRAE_ACCESS_TOKEN 和 TRAE_REFRESH_TOKEN 不能填成同一个值：'\
+                      'accessToken 是 eyJ 开头的长 JWT，refreshToken 形如 xxx=.18dxxx，两串完全不同。', file=sys.stderr)
+                print('   单账号推荐只填 TRAE_REFRESH_TOKEN（脚本会自动换取 accessToken）；'\
+                      '请用 trae_get_token.py 重新提取。', file=sys.stderr)
+                sys.exit(1)
+            if access_token and refresh_token and not access_token.startswith('eyJ') and refresh_token.startswith('eyJ'):
+                print('❌ [凭据] 两个变量可能填反了：TRAE_ACCESS_TOKEN 应以 eyJ 开头，'\
+                      '而 TRAE_REFRESH_TOKEN 不是。请把两串互换后重试。', file=sys.stderr)
+                sys.exit(1)
+            acc = {'accessToken': access_token,
+                   'refreshToken': refresh_token,
                    'deviceId': os.getenv('TRAE_DEVICE_ID', ''),
                    'uid': os.getenv('TRAE_UID', ''),
                    'name': os.getenv('TRAE_NAME', '环境变量账号')}
