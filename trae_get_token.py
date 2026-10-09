@@ -146,6 +146,32 @@ def candidate_paths():
             p = os.path.join(base, n, *sub)
             if os.path.isfile(p): yield p
 
+_DEVICE_ID_RE = re.compile(r"^\d{12,20}$")
+
+
+def is_valid_device_id(d):
+    """设备号是否为客户端注册过的那种十进制数字串（位数不固定，15/16 位都见过）。"""
+    return bool(_DEVICE_ID_RE.match(str(d or "").strip()))
+
+
+def device_id_in(path):
+    """从 storage.json 里取客户端真实设备号；取不到返回空串（纯读文件）。"""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            s = json.load(fh)
+    except Exception:
+        return ""
+    if not isinstance(s, dict):
+        return ""
+    for k, v in s.items():
+        if k.startswith("iCubeAuthInfo://icube-dc:"):
+            d = k[len("iCubeAuthInfo://icube-dc:"):].strip()
+            if is_valid_device_id(d):
+                return d
+        elif k.rstrip(":") == "iCubeAuthInfo://icube-dc" and is_valid_device_id(v):
+            return str(v).strip()
+    return ""
+
 def extract(path):
     s = json.load(open(path, encoding="utf-8"))
     enc = s.get(STORAGE_KEY)
@@ -167,14 +193,10 @@ def device_keys():
             s = json.load(open(path, encoding="utf-8"))
         except Exception:
             continue
-        did = ""
-        for k in s:
-            if k.startswith("iCubeAuthInfo://icube-dc:"):
-                d = k.split(":")[-1]
-                if d.isdigit():
-                    did = d
-                    break
+        did = device_id_in(path)
         if not did:
+            print("[!] %s 里没找到客户端真实设备号（键 iCubeAuthInfo://icube-dc:<数字>）" % path,
+                  file=sys.stderr)
             continue
         enc = s.get("iCubeAuthInfo://icube-dc:%s" % did)
         if not enc:
@@ -307,10 +329,17 @@ def accounts_mode():
             print("[!] 解析失败 %s: %s" % (p, e), file=sys.stderr); continue
         if not r or not r.get("refreshToken"):
             continue
-        add({"accessToken": r.get("accessToken") or "",
-             "refreshToken": r["refreshToken"],
-             "uid": r.get("uid") or "",
-             "name": r.get("nickname") or r.get("uid") or ""})
+        entry = {"accessToken": r.get("accessToken") or "",
+                 "refreshToken": r["refreshToken"],
+                 "uid": r.get("uid") or "",
+                 "name": r.get("nickname") or r.get("uid") or ""}
+        real_did = device_id_in(p)
+        if real_did:
+            entry["realDeviceId"] = real_did
+        else:
+            print("[!] %s 里没有客户端设备号，该账号签到会被服务端拒成 9074" % p,
+                  file=sys.stderr)
+        add(entry)
 
     dirs = [os.environ.get("TRAE_ACCOUNT_DIR", "").strip(),
             os.getcwd(),

@@ -12,9 +12,9 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 链式续期   refreshToken 会轮换，脚本自动回写最新值，长期不失效
   • 多账号     TRAE_ACCOUNTS(JSON) / TRAE_REFRESH_TOKEN[_N] / 桌面端凭据 三种配法均可
   • 自动解密   直接读 Trae 客户端 storage.json，免抓包免手抄 token
-  • 稳定设备   按账号生成固定 16 位设备号并持久化，跨运行不漂移
-  • 一轮全签   默认每轮把所有未签账号全签掉，9074 自动换号兜底
-  • 抗 9074    请求体带 req_source + 设备头（与客户端同款，缺了会被拒成 9074）
+  • 稳定设备   优先使用客户端真实注册的设备号（storage.json 键名里的 Aha 号），跨运行不漂移
+  • 一轮全签   默认每轮把所有未签账号全签掉，9074 时在真实设备号之间切换
+  • 抗 9074    请求体带 req_source + 设备头，且 x-device-id 必须是客户端真实注册过的号
   • 失败让路   本轮没签成的交给下一轮 cron 补签，不硬轰、不拖其它账号下水
   • 积分余额   签到后用 entitlement 接口查真实余额，推送里直接给数字
   • 微信推送   企业微信群机器人 / PushPlus，多账号结果一目了然
@@ -28,11 +28,11 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   • 当日状态文件 .trae_checkin_state.json —— 已签成功的账号后续运行零请求
   • HTTP 429/5xx 与 code=9074 同等对待；账号间真发过 claim 才错峰 12~25s
   • 续期带设备证明（纯标准库 ECDSA P-256 签名）：新版 ExchangeToken 缺了会报 20405
-  • 9074 反复出现 = 设备号被服务端记住，自动换新设备号立刻重签（实测有效）
-  • 换号后仍 9074 才按账号记冷却（早窗 12 分钟 / 平时 55 分钟），冷却内零请求
+  • 9074 绝大多数是「设备号不对」——实测同账号同时刻对照：生成的号 → 9074，
+    客户端真实注册号 → 通过设备检查；所以脚本只使用真实号，不再生成假号兜底
+  • 换号只在真实号之间切换，换不了就按账号记冷却（早窗 12 分钟 / 平时 55 分钟），冷却内零请求
   • 早窗(TRAE_PEAK_HOURS，默认 0 点)自动一轮全签，其余时段每小时轮 1 个
-  • 实测结论：换设备号 / 换出口 IP / 换请求头 都绕不开 9074（服务端按"当前
-    参与用户太多"做容量门），凌晨 0 点前后最容易签成，所以 cron 建议放在 00:23
+  • cron 建议 00:23 起跑（避开 00:00~00:10 整点高峰），启动后再随机抖 0~20s
   • 实测 00:00~00:10 是全天最高峰（整点所有人一起签），cron 别用 0 分；
     本脚本启动后再随机抖 0~20s，避免同一定时任务的多个部署互相撞车
   • 设备号优先用客户端真实号（storage.json 的 iCubeAuthInfo://icube-dc 键），拿不到才生成
@@ -44,14 +44,14 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_ACCESS_TOKEN        单账号 accessToken（可选）
   TRAE_ICUBE_AUTH          桌面端加密凭据串（可选，自动解密）
   TRAE_STORAGE_PATH        storage.json 路径（可选，自动读取并解密）
-  TRAE_DEVICE_ID[_N]       设备号（可选；留空则优先用客户端真实设备号，再回退生成）
+  TRAE_DEVICE_ID[_N]       设备号（可选；优先用客户端真实设备号，本机读不到时才用这个值）
   TRAE_BATCH               每轮签几个账号（可选，默认 all 一轮全签；设 1 按小时轮换）
   TRAE_JITTER              启动随机抖动（可选，默认开；设 0 关闭 0~20s 错峰等待）
   TRAE_COOLDOWN_MIN        平时 9074 冷却分钟数（可选，默认 55）
   TRAE_PEAK_HOURS          早窗小时（可选，默认 0；支持 0 / 0,23 / 0-1）
   TRAE_PEAK_COOLDOWN_MIN   早窗内冷却分钟数（可选，默认 12）
   TRAE_CIRCUIT             设 1 恢复旧熔断：一个账号 9074 就全体收工（默认关）
-  TRAE_ROTATE              9074 后自动换新设备号（可选，默认开；设 0 关闭）
+  TRAE_ROTATE              9074 后在真实设备号之间切换（可选，默认开；设 0 关闭）
   TRAE_DEVICE_BRAND        设备品牌请求头（可选，默认不发，对应桌面端 device_model）
   TRAE_DEVICE_KEY_PEM      设备 ECDSA 私钥（新版续期必需，--export-keys 导出）
   TRAE_DEVICE_PUB_PEM      设备 ECDSA 公钥（新版续期必需，同上）
@@ -69,7 +69,8 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
     icubeAuth                  桌面端 storage.json 里的加密串（自动解密）
     storagePath                storage.json 路径（自动读取并解密）
     uid                        账号标识（用于缓存键与日志）
-    deviceId                   16 位设备号（可选，不填自动生成并持久化）
+    deviceId                   设备号（可选；建议留空，脚本自动用客户端真实设备号）
+    realDeviceId               客户端真实设备号（trae_get_token.py --accounts 自动带上）
     name                       备注（可选）
 
 🚀 使用方法（青龙面板）
@@ -81,21 +82,22 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
      积分查询另用 trae_credit_monitor.py
 
 🎛 运行模式
-  一轮全签（默认）   不设 TRAE_BATCH，把所有未签账号一轮签完（9074 自动换号兜底）
+  一轮全签（默认）   不设 TRAE_BATCH，把所有未签账号一轮签完（9074 时在真实设备号间切换）
   按小时轮签         TRAE_BATCH=1 每轮只签 1 个账号，按北京时间小时轮换
   手动指定           TRAE_ONLY=3 只签第 3 个；也可填 uid 或 name
   当日去重           已签成功的账号当天不再请求接口，重复触发定时任务不浪费额度
 
 📌 特别说明
-  • 签接口按"设备号"维度判断今日是否已签；实测用模拟的 16 位数字即可签到成功，
-    服务端不校验设备号是否真实注册。
+  • 签接口按「设备号」维度判断今日是否已签；x-device-id 必须是客户端真实注册过的
+    那串十进制数字（位数不固定，15/16 位都见过），生成的号会被拒成 9074。
+  • 一个真实设备号一天只能签一个账号；N 个账号需要 N 个客户端真号。
   • refreshToken 是轮换链：每次续期都会产生新值，脚本会写回缓存与账号文件，
     请勿在多处同时使用同一账号，否则会互相使对方 token 失效。
   • 只有"refreshToken 也续期失败"才算硬失败；限流等软失败会照常推送结果。
 ────────────────────────────────────────────────────────────
 """
 
-import base64, glob, hashlib, json, os, platform, random, sys, time, urllib.request, urllib.error
+import base64, glob, hashlib, json, os, platform, random, re, sys, time, urllib.request, urllib.error
 
 UgHost = 'https://api.trae.cn'
 OAuthHost = 'https://api.trae.com.cn'
@@ -191,16 +193,31 @@ def decrypt_storage_value(base64_value):
     return plaintext.decode('utf-8')
 
 
-def dc_device_id(storage):
-    """取客户端真实设备号：storage.json 里 iCubeAuthInfo://icube-dc:<numeric> 键。
-    真机设备号比脚本生成的号更像正常客户端，拿不到时才回退生成号。"""
-    for k in storage:
-        if k.startswith('iCubeAuthInfo://icube-dc:'):
-            d = k.split(':')[-1]
-            if d.isdigit():
-                return d
-    return ''
+_DEVICE_ID_RE = re.compile(r'^\d{12,20}$')
 
+
+def is_valid_device_id(d):
+    """设备号是否为客户端注册过的那种十进制数字串。
+
+    位数不固定：多数是 16 位，也见过 15 位 —— 16 位只是观察，不是规则。
+    服务端认的是「客户端注册过的那串数字」，所以这里只做防呆（12~20 位十进制）。
+    """
+    return bool(_DEVICE_ID_RE.match(str(d or '').strip()))
+
+
+def dc_device_id(storage):
+    """取客户端真实设备号：storage.json 里 iCubeAuthInfo://icube-dc:<数字> 键。
+
+    也兼容「键名是 iCubeAuthInfo://icube-dc、号写在值里」的写法。
+    取不到返回空串（不会回退生成号）。"""
+    for k, v in storage.items():
+        if k.startswith('iCubeAuthInfo://icube-dc:'):
+            d = k[len('iCubeAuthInfo://icube-dc:'):].strip()
+            if is_valid_device_id(d):
+                return d
+        elif k.rstrip(':') == 'iCubeAuthInfo://icube-dc' and is_valid_device_id(v):
+            return str(v).strip()
+    return ''
 
 def find_storage_json():
     "“”自动探测桌面端 storage.json 路径（Windows / macOS / Linux），找不到返回 None。“”"
@@ -793,30 +810,66 @@ def save_device_ids(ids):
         print('⚠️  [设备号] 持久化失败: %s' % e)
 
 
-def rotate_device_id(acc):
-    """9074 反复出现时换一个全新设备号：旧号会被服务端记住（越戳越黑），
-    实测换个新号立刻就能签成。新号按时间生成，保证与旧号不同并写回设备号文件。"""
-    key = _acct_key(acc)
-    ids = load_device_ids()
-    new_id = stable_device_id('%s:rotate:%d' % (key, int(time.time())))
-    ids[key] = new_id
-    save_device_ids(ids)
-    acc['deviceId'] = new_id
-    print('🔄 [设备号] %s 换新设备号 %s（旧号已被服务端记住）'
-          % (acc.get('_name') or acc.get('name') or key, new_id))
-    return new_id
+def real_device_ids():
+    """扫描本机所有 Trae 客户端 storage.json，返回真实注册过的设备号（去重）。"""
+    out = []
+    paths = []
+    env = os.getenv('TRAE_STORAGE_PATH', '').strip()
+    if env:
+        paths.append(env)
+    found = find_storage_json()
+    if found:
+        paths.append(found)
+    for p in paths:
+        if not p or not os.path.isfile(p):
+            continue
+        try:
+            with open(p, 'r', encoding='utf-8') as fh:
+                storage = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(storage, dict):
+            continue
+        d = dc_device_id(storage)
+        if d and d not in out:
+            out.append(d)
+    return out
 
+
+def rotate_device_id(acc):
+    """9074 后尝试换设备号 —— 但只能换成**客户端真实注册过的另一个号**。
+
+    实测：服务端认的是客户端注册过的那串数字，生成的号注定被拒成 9074。
+    所以这里绝不再生成假号，只在本机能读到另一个真实号时切换；
+    读不到就返回 None，由调用方冷却等待（继续烧假号只会越戳越黑）。
+    """
+    key = _acct_key(acc)
+    name = acc.get('_name') or acc.get('name') or key
+    tried = {str(acc.get('deviceId') or '').strip(), str(acc.get('_realDid') or '').strip()}
+    for d in real_device_ids():
+        if d not in tried:
+            acc['deviceId'] = d
+            acc['_realDid'] = d
+            print('🔄 [设备号] %s 换用本机客户端的另一个真实设备号 %s' % (name, d))
+            return d
+    print('ℹ️  [设备号] %s 没有可切换的其它真实设备号（生成号注定 9074，不再更换）' % name)
+    return None
 
 def device_id_for(acc, manual=''):
-    """优先级：手动 deviceId > 客户端真实设备号 > 已持久化 > 自动生成并持久化。
+    """优先级：客户端真实设备号 > 手动 deviceId > 已持久化 > 生成兜底。
+
+    实测（同账号同时刻对照）：x-device-id 用客户端注册过的真实号才能过设备检查，
+    生成的号一律被拒成 9074。所以本机读得到真实号时，它优先于配置里的任何值；
+    配置值只在本机读不到真实号时使用（它可能是从别的机器拷来的真号）。
+    生成的号只作最后兜底，让脚本能跑完并给出可读的失败信息，不代表能签成。
+
     种子必须用稳定键(_acct_key)：早先用 accessToken 做种子，而 accessToken
-    每次续期都会变，导致设备号每轮都换、凭据文件无限增长 —— 对风控而言
-    "设备不停更换"本身就是高危信号。"""
-    if manual and manual.isdigit() and len(manual) == 16:
-        return manual
+    每次续期都会变，导致设备号每轮都换 —— "设备不停更换"本身就是高危信号。"""
     real = str(acc.get('_realDid') or '').strip()
-    if real.isdigit() and len(real) == 16:
+    if is_valid_device_id(real):
         return real
+    if is_valid_device_id(manual):
+        return str(manual).strip()
     seed = _acct_key(acc)
     ids = load_device_ids()
     if seed in ids:
@@ -1209,9 +1262,10 @@ def checkin_account(acc, cache):
     result['_claimed'] = True          # 只有真正发过 claim 才需要账号间错峰
     ok, code, msg, gained = claim_with_retry(acc, cache)
     if code == RATE_CODE and os.getenv('TRAE_ROTATE', '1').strip() != '0':
-        # 9074 不是限流，是这个设备号被服务端记住了 —— 换个新号立刻能签（实测）
-        rotate_device_id(acc)
-        ok, code, msg, gained = claim_with_retry(acc, cache)
+        # 9074 绝大多数是「设备号不对」：只有能换到客户端真实注册过的另一个号才值得重试；
+        # 换成生成的假号必然还是 9074（实测），所以 rotate_device_id 不再造假号。
+        if rotate_device_id(acc):
+            ok, code, msg, gained = claim_with_retry(acc, cache)
     if code == RATE_CODE:
         set_cooldown(_acct_key(acc), cooldown_minutes())
     if ok:

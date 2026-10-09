@@ -336,6 +336,37 @@ def stable_device_id(seed):
     return str(int(h[:15], 16))[:16].rjust(16, '0')
 
 
+def real_device_id():
+    """本机 Trae 客户端注册过的真实设备号（storage.json 键名里的 Aha 号），取不到返回 ''。"""
+    try:
+        home = os.path.expanduser('~')
+        names = ('Trae CN', 'TRAE SOLO CN', 'TRAE SOLO', 'Trae')
+        sub = ('User', 'globalStorage', 'storage.json')
+        base = os.environ.get('APPDATA') or os.path.join(home, 'AppData', 'Roaming')
+        cands = [os.path.join(base, n, *sub) for n in names]
+        cands += [os.path.join(home, 'Library', 'Application Support', n, *sub) for n in names]
+        cands += [os.path.join(home, '.config', n, *sub) for n in ('trae', 'trae-cn')]
+        env = os.environ.get('TRAE_STORAGE_PATH', '').strip()
+        if env:
+            cands.insert(0, env)
+        for p in cands:
+            if not os.path.isfile(p):
+                continue
+            with open(p, encoding='utf-8') as fh:
+                s = json.load(fh)
+            for k, v in s.items():
+                if k.startswith('iCubeAuthInfo://icube-dc:'):
+                    d = k[len('iCubeAuthInfo://icube-dc:'):].strip()
+                    if d.isdigit() and 12 <= len(d) <= 20:
+                        return d
+                elif k.rstrip(':') == 'iCubeAuthInfo://icube-dc':
+                    d = str(v).strip()
+                    if d.isdigit() and 12 <= len(d) <= 20:
+                        return d
+    except Exception:
+        pass
+    return ''
+
 def persist_refresh_token(uid, new_rt, seed_rt):
     """把续期后的最新 refreshToken 回写到账号 JSON（需设 TRAE_ACCOUNT_DIR）。"""
     d = os.environ.get('TRAE_ACCOUNT_DIR', '').strip()
@@ -366,7 +397,7 @@ def persist_refresh_token(uid, new_rt, seed_rt):
 
 def get_token(idx, rt_env, did_env, cache, force_refresh=False, keys=None, at_env=''):
     key = str(idx)
-    did = did_env or stable_device_id(rt_env)
+    did = real_device_id() or did_env or stable_device_id(rt_env)
     ent = cache.get(key) or {}
     at = ent.get('accessToken')
     rt_cache = ent.get('refreshToken')
