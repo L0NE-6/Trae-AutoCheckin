@@ -1414,6 +1414,9 @@ def main():
            '✅ 成功 %d  ☑️ 已签 %d  ⏳ 待重试 %d  ❌ 失败 %d' % (ok_n, already_n, soft_n, fail_n + dead_n)]
     for r in results:
         out.append('%s %s(%s): %s | %s' % (r['icon'], r['name'], r['uid'], r['status'], r['detail']))
+    # 逐账号明细也打到终端：只看汇总框时「失败 1」看不出原因，排障必须先能看到它
+    for r in results:
+        print('%s [%s] %s：%s' % (r['icon'], r['status'], r['name'], r['detail']))
     push('🤖 Trae SOLO 多账号签到', '\n'.join(out))
 
 
