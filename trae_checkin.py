@@ -52,6 +52,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_PEAK_COOLDOWN_MIN   早窗内冷却分钟数（可选，默认 12）
   TRAE_CIRCUIT             设 1 恢复旧熔断：一个账号 9074 就全体收工（默认关）
   TRAE_ROTATE              9074 后在真实设备号之间切换（可选，默认开；设 0 关闭）
+  TRAE_VERIFY_CLAIM        领取后同设备号回查确认（可选，默认开；设 0 关闭）
   TRAE_DEVICE_BRAND        设备品牌请求头（可选，默认不发，对应桌面端 device_model）
   TRAE_DEVICE_KEY_PEM      设备 ECDSA 私钥（新版续期必需，--export-keys 导出）
   TRAE_DEVICE_PUB_PEM      设备 ECDSA 公钥（新版续期必需，同上）
@@ -1269,6 +1270,22 @@ def checkin_account(acc, cache):
     if code == RATE_CODE:
         set_cooldown(_acct_key(acc), cooldown_minutes())
     if ok:
+        # claim 的 code=0 可能是假成功：当日已签过的账号对任何 device_id 都回 0
+        # （上游实测）。所以「真领到」以**同一个 device_id 回查** checked_in 是否翻转
+        # 为准；没翻转就不报成功，交给下一轮 cron，避免亮绿灯但实际什么都没到账。
+        confirmed = False
+        if os.getenv('TRAE_VERIFY_CLAIM', '1').strip() != '0':
+            checked_after, _, _, code_after, _ = status_of(acc['accessToken'], acc['deviceId'])
+            confirmed = checked_after is True
+            if not confirmed:
+                result['icon'] = '⏳'
+                result['status'] = '待确认'
+                result['credits'] = credits if credits is not None else '-'
+                result['detail'] = ('领取接口返回成功，但同设备号回查未确认（已签=%s，查询码=%s）——'
+                                    '本轮不判定签到成功，下轮自动重试') % (checked_after, code_after)
+                set_cooldown(_acct_key(acc), cooldown_minutes())
+                print('⏳ [结果] 未确认到账，转下轮')
+                return result
         pts = credits_summary(acc)
         result['status'] = '签到成功'
         gain = ('，本次 +%s 积分' % _fmt(gained)) if gained else ''
@@ -1278,8 +1295,8 @@ def checkin_account(acc, cache):
         else:
             _, credits_after, _, _, _ = status_of(acc['accessToken'], acc['deviceId'])
             result['credits'] = credits_after if credits_after is not None else credits
-            result['detail'] = '签到成功（code=0），积分 %s → %s' % (credits, _fmt(result['credits']))
-        print('🎉 [结果] 签到成功')
+            result['detail'] = '签到成功（已回查确认），积分 %s → %s' % (credits, _fmt(result['credits']))
+        print('🎉 [结果] 签到成功（已回查确认）')
     elif code == ALREADY_CODE:
         result['icon'] = '☑️'
         result['status'] = '已签到'

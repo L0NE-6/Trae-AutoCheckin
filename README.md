@@ -224,6 +224,7 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_PEAK_COOLDOWN_MIN` | ➖ | 早窗内冷却分钟数，默认 **12**（好让下轮还在窗口里补签） |
 | `TRAE_CIRCUIT` | ➖ | 设 `1` 恢复旧熔断：一个账号 9074 就全体收工（默认关） |
 | `TRAE_ROTATE` | ➖ | 9074 后在真实设备号之间切换（不再生成假号），默认开；设 `0` 关闭 |
+| `TRAE_VERIFY_CLAIM` | ➖ | 领取后同设备号回查确认，默认开；设 `0` 关闭 |
 | `TRAE_DEVICE_BRAND` | ➖ | 设备品牌请求头（可选，默认不发，与桌面端 `device_model` 对应） |
 | `TRAE_DEVICE_KEY_PEM` | ✅ | **新版续期必需**：设备 ECDSA 私钥（`trae_get_token.py --export-keys` 导出） |
 | `TRAE_DEVICE_PUB_PEM` | ✅ | **新版续期必需**：设备 ECDSA 公钥（同上） |
