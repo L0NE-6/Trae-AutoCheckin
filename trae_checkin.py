@@ -733,12 +733,32 @@ def _jwt_uid(token):
 
 
 def _jwt_exp(token):
+    """读 JWT 到期（秒）：优先标准 exp，其次中国版自定义 TokenExpireAt / tokenExpireAt。
+
+    中国版的令牌把到期写在自定义声明里且可能是**字符串**（issue #263 实测），
+    旧的只看 exp 的读法会静默落 0 —— 缓存里的有效期与续期节奏一起坏。
+    声明值数字 / 字符串都认，秒与毫秒按量级归一；读不到返回 0。
+    """
     try:
         parts = token.split('.')
         pad = parts[1] + '=' * (-len(parts[1]) % 4)
-        return int(json.loads(base64.urlsafe_b64decode(pad)).get('exp', 0))
+        payload = json.loads(base64.urlsafe_b64decode(pad))
     except Exception:
         return 0
+    for claim in ('exp', 'TokenExpireAt', 'tokenExpireAt'):
+        raw = payload.get(claim)
+        if raw is None or raw == '':
+            continue
+        try:
+            value = float(str(raw).strip())
+        except Exception:
+            continue
+        if value <= 0:
+            continue
+        if value > 100000000000:      # 毫秒量级 → 秒
+            value = value / 1000.0
+        return int(value)
+    return 0
 
 
 def ensure_token(acc, cache):
