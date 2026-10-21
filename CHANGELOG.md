@@ -1,5 +1,14 @@
 # 更新日志
 
+## v1.0.6（2026-10-21）
+
+- 新增：GitHub Actions 工作流 `.github/workflows/daily.yml`（默认只开手动触发，schedule 需 fork 后自行取消注释）；
+  - 用 Actions Cache 持久化 `.trae_token_cache.json` / `.trae_device_ids.json` / `.trae_checkin_state.json`；
+  - 缓存内容用 `TRAE_CACHE_KEY` 加密，避免轮换后的 refreshToken 以明文进入 Cache；
+  - 解决 Actions 每次全新环境导致 refreshToken 轮换后下一次运行失效的问题。
+- 兼容：PushPlus token 继续优先识别 `PLUSPLUS_TOKEN`，同时支持 `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` 别名；
+- 文档：README 补充 Actions 部署步骤、Secrets 清单与 `TRAE_CACHE_KEY` 说明。
+
 
 ## v1.0.5（2026-10-16）
 

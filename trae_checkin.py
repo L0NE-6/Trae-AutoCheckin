@@ -63,7 +63,7 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_TOKEN_CACHE         token 缓存文件路径（可选，默认 /ql/data/config/ 或脚本同目录）
   TRAE_ACCOUNT_DIR         账号 JSON 所在目录（可选，用于回写轮换后的 refreshToken）
   QYWX_TOKEN               企业微信群机器人 Webhook key（可选，也兼容 WECHAT_WEBHOOK）
-  PLUSPLUS_TOKEN           PushPlus token（可选）
+  PLUSPLUS_TOKEN           PushPlus token（可选；兼容 PLUSHPLUS_TOKEN / PUSHPLUS_TOKEN）
 
   TRAE_ACCOUNTS 每个账号对象支持的字段：
     accessToken / refreshToken  明文 token（可只给 refreshToken，脚本自动换取）
@@ -121,7 +121,7 @@ QYWX_URL = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key='
 PUSHPLUS_URL = 'https://www.pushplus.plus/send'
 
 # 企业微信 / PushPlus 推送配置（留空则不推送）
-PLUSPLUS_TOKEN = os.getenv('PLUSPLUS_TOKEN', '')
+PLUSPLUS_TOKEN = (os.getenv('PLUSPLUS_TOKEN') or os.getenv('PLUSHPLUS_TOKEN') or os.getenv('PUSHPLUS_TOKEN') or '').strip()
 QYWX_TOKEN = os.getenv('QYWX_TOKEN') or os.getenv('WECHAT_WEBHOOK') or ''
 
 HERE = os.path.dirname(os.path.abspath(__file__))

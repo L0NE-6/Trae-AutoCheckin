@@ -201,6 +201,21 @@ python trae_checkin.py          # 签到
 python trae_credit_monitor.py   # 查积分
 ```
 
+### 方式三：GitHub Actions（可选）
+
+仓库已内置 `.github/workflows/daily.yml`。Actions 每次运行都是全新环境，而 Trae 的 refreshToken 会轮换，所以工作流会用 Actions Cache 保存运行状态，并用 `TRAE_CACHE_KEY` 加密后再写入缓存。
+
+1. Fork 本仓库到自己的账号，进入 Actions 页面启用 workflows；
+2. 在 Settings → Secrets and variables → Actions 添加：
+   - `TRAE_ACCOUNTS`（推荐）或旧版 `TRAE_REFRESH_TOKEN`；
+   - `TRAE_DEVICE_KEY_PEM` / `TRAE_DEVICE_PUB_PEM` / `TRAE_MACHINE_ID` / `TRAE_DEVICE_ID`（新版续期必需）；
+   - `TRAE_CACHE_KEY`（必填）：自己生成一个足够长的随机字符串，用于加密轮换 token 缓存；
+   - `QYWX_TOKEN` / `PLUSPLUS_TOKEN`（可选）。
+3. 打开 `.github/workflows/daily.yml`，取消 `schedule` 两行注释（默认北京时间 00:23 运行）；
+4. 先手动执行一次 workflow，确认签到成功；之后每天自动运行。
+
+> 🔐 Cache 里只有用 `TRAE_CACHE_KEY` 加密后的状态文件，不要把 `.trae_token_cache.json` 等运行数据提交到仓库。同一个账号不要同时跑青龙和 Actions，否则两边的 refreshToken 会互相失效。
+
 ---
 
 ## ⚙️ 环境变量
@@ -232,9 +247,10 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_CLIENT_ID` | ➖ | 客户端 ClientID，默认已内置桌面端实测值 `ono9krqynydwx5`；换 Trae 版本后才需要改 |
 | `TRAE_DEVICE_NAME` | ➖ | 设备名（默认取主机名） |
 | `TRAE_DEVICE_MODEL` | ➖ | 设备型号（可选，默认不发） |
+| `TRAE_CACHE_KEY` | ➖ | GitHub Actions 专用：加密轮换 token 缓存的随机密钥；启用 Actions 时必填 |
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（换号才是正解，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
-| `PLUSPLUS_TOKEN` | ➖ | PushPlus token |
+| `PLUSPLUS_TOKEN` / `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` | ➖ | PushPlus token（任选其一，优先识别 `PLUSPLUS_TOKEN`） |
 
 > 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
 

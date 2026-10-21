@@ -1,0 +1,107 @@
+name: Trae AutoCheckin Daily
+
+on:
+  # 定时签到留给 fork 后自行开启（取消下面两行注释即可）
+  # schedule:
+  #   - cron: '23 16 * * *'  # 北京时间 00:23
+  workflow_dispatch:
+
+concurrency:
+  group: trae-auto-checkin
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TRAE_CACHE_KEY: ${{ secrets.TRAE_CACHE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check cache encryption key
+        if: ${{ env.TRAE_CACHE_KEY == '' }}
+        run: |
+          echo "::error::缺少 TRAE_CACHE_KEY。请先添加一个随机长字符串 Secret，用于加密轮换后的 token 缓存。"
+          exit 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore encrypted state
+        uses: actions/cache/restore@v4
+        with:
+          path: .trae-cache/state.enc
+          key: trae-state-v1-${{ github.run_id }}
+          restore-keys: |
+            trae-state-v1-
+
+      - name: Decrypt state
+        if: ${{ hashFiles('.trae-cache/state.enc') != '' }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt -pass env:TRAE_CACHE_KEY -in .trae-cache/state.enc -out "$RUNNER_TEMP/trae-state.tar"
+          tar -xf "$RUNNER_TEMP/trae-state.tar" -C .
+          rm -f "$RUNNER_TEMP/trae-state.tar"
+
+      - name: Run checkin
+        env:
+          TRAE_ACCOUNTS: ${{ secrets.TRAE_ACCOUNTS }}
+          TRAE_REFRESH_TOKEN: ${{ secrets.TRAE_REFRESH_TOKEN }}
+          TRAE_REFRESH_TOKEN_2: ${{ secrets.TRAE_REFRESH_TOKEN_2 }}
+          TRAE_REFRESH_TOKEN_3: ${{ secrets.TRAE_REFRESH_TOKEN_3 }}
+          TRAE_REFRESH_TOKEN_4: ${{ secrets.TRAE_REFRESH_TOKEN_4 }}
+          TRAE_REFRESH_TOKEN_5: ${{ secrets.TRAE_REFRESH_TOKEN_5 }}
+          TRAE_REFRESH_TOKEN_6: ${{ secrets.TRAE_REFRESH_TOKEN_6 }}
+          TRAE_REFRESH_TOKEN_7: ${{ secrets.TRAE_REFRESH_TOKEN_7 }}
+          TRAE_REFRESH_TOKEN_8: ${{ secrets.TRAE_REFRESH_TOKEN_8 }}
+          TRAE_REFRESH_TOKEN_9: ${{ secrets.TRAE_REFRESH_TOKEN_9 }}
+          TRAE_ACCESS_TOKEN: ${{ secrets.TRAE_ACCESS_TOKEN }}
+          TRAE_DEVICE_KEY_PEM: ${{ secrets.TRAE_DEVICE_KEY_PEM }}
+          TRAE_DEVICE_PUB_PEM: ${{ secrets.TRAE_DEVICE_PUB_PEM }}
+          TRAE_MACHINE_ID: ${{ secrets.TRAE_MACHINE_ID }}
+          TRAE_DEVICE_ID: ${{ secrets.TRAE_DEVICE_ID }}
+          TRAE_UID: ${{ secrets.TRAE_UID }}
+          TRAE_DEVICE_BRAND: ${{ secrets.TRAE_DEVICE_BRAND }}
+          TRAE_DEVICE_NAME: ${{ secrets.TRAE_DEVICE_NAME }}
+          TRAE_DEVICE_MODEL: ${{ secrets.TRAE_DEVICE_MODEL }}
+          TRAE_CLIENT_ID: ${{ secrets.TRAE_CLIENT_ID }}
+          TRAE_ONLY: ${{ secrets.TRAE_ONLY }}
+          TRAE_BATCH: ${{ secrets.TRAE_BATCH }}
+          TRAE_JITTER: ${{ secrets.TRAE_JITTER }}
+          TRAE_COOLDOWN_MIN: ${{ secrets.TRAE_COOLDOWN_MIN }}
+          TRAE_PEAK_HOURS: ${{ secrets.TRAE_PEAK_HOURS }}
+          TRAE_PEAK_COOLDOWN_MIN: ${{ secrets.TRAE_PEAK_COOLDOWN_MIN }}
+          TRAE_CIRCUIT: ${{ secrets.TRAE_CIRCUIT }}
+          TRAE_ROTATE: ${{ secrets.TRAE_ROTATE }}
+          TRAE_VERIFY_CLAIM: ${{ secrets.TRAE_VERIFY_CLAIM }}
+          QYWX_TOKEN: ${{ secrets.QYWX_TOKEN }}
+          WECHAT_WEBHOOK: ${{ secrets.WECHAT_WEBHOOK }}
+          PLUSPLUS_TOKEN: ${{ secrets.PLUSPLUS_TOKEN }}
+          PLUSHPLUS_TOKEN: ${{ secrets.PLUSHPLUS_TOKEN }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: python trae_checkin.py
+
+      - name: Encrypt state
+        if: ${{ always() && env.TRAE_CACHE_KEY != '' }}
+        run: |
+          mkdir -p .trae-cache
+          files=""
+          for f in .trae_token_cache.json .trae_device_ids.json .trae_checkin_state.json; do
+            if [ -f "$f" ]; then files="$files $f"; fi
+          done
+          if [ -n "$files" ]; then
+            tar -cf "$RUNNER_TEMP/trae-state.tar" $files
+            openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:TRAE_CACHE_KEY -in "$RUNNER_TEMP/trae-state.tar" -out .trae-cache/state.enc
+            rm -f "$RUNNER_TEMP/trae-state.tar"
+          fi
+
+      - name: Save encrypted state
+        if: ${{ always() && env.TRAE_CACHE_KEY != '' && hashFiles('.trae-cache/state.enc') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .trae-cache/state.enc
+          key: trae-state-v1-${{ github.run_id }}
