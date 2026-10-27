@@ -4,6 +4,8 @@
 
 **Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信推送**
 
+> 当前版本：**v1.0.7**（2026-10-27）
+
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-success)](.)
 [![Platform](https://img.shields.io/badge/platform-青龙%20%7C%20本地%20%7C%20任意定时-blue)](.)
@@ -41,7 +43,9 @@
 - 🔁 **产品线回退** — 续期自动在 IDE（Trae CN）/ SOLO（TRAE SOLO CN）两套钥匙间回退，两类客户端提取的 token 都能续
 - 👥 **多账号** — 支持任意数量账号，环境变量即可配置
 - 📅 **当日跳过** — 已签成功的账号后续运行零请求，不重复消耗
+- ✅ **9004 / 9095 同日已签** — 两个业务码都按「今日已签到」处理，不再误报失败
 - 📱 **稳定设备号** — 优先用客户端真实设备号，拿不到才按账号生成固定 16 位
+- 📦 **积分包到期** — 积分监控可读取积分包额度/用量，跳过耗尽包并提示最早到期包
 - 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
 - 🌐 **网页登录** — 真浏览器走官网 OAuth 拿 Token，验证码/滑块都在浏览器里完成
 - 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
@@ -354,8 +358,10 @@ TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
                       code=0 成功       code=9074 设备号被记住
                           │                 │
                           ▼                 ▼
-                     🎉 签到成功       🔄 换新设备号重签 → 仍 9074 才冷却
+                      🎉 签到成功       🔄 换新设备号重签 → 仍 9074 才冷却
 ```
+
+> ✅ claim 返回 `code=9004` 或 `code=9095` 时，都表示本设备今日已签到，直接记为「已签到」，不会计入失败。
 
 > 💡 **关于 refreshToken**
 > Trae 的 `refreshToken` 是**轮换链**：每次续期都会产生一个新值，旧值随即失效。
@@ -420,7 +426,7 @@ python trae_get_token.py
 > 客户端真实注册号 → 通过设备检查。9074 基本等于「设备号不对」，跟出口 IP / 请求头无关。
 > 另外请求体必须带 `{"req_source":1}` 和设备头（与桌面端一致），空请求体也会被拒成 9074。
 
-> ⚠️ 一个真实设备号一天只能签一个账号（`9095`）；N 个账号要签就需要 N 个客户端真号，
+> ⚠️ 一个真实设备号一天只能签一个账号（`9004` / `9095` 都表示本设备今日已签）；N 个账号要签就需要 N 个客户端真号，
 > 在装了客户端的机器上跑 `python trae_get_token.py --accounts` 会逐个账号自动带上真号。
 
 <details>
@@ -440,6 +446,7 @@ Trae-AutoCheckin/
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 🌐 网页 OAuth 登录换 Token（真浏览器流程）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS
+├── tests/                      # 🧪 离线回归测试（9004/9095、积分包解析）
 ├── assets/donate/              # ☕ 投喂收款码（支付宝 / 微信）
 ├── .gitignore                  # 🚫 运行时缓存与账号文件永不入库
 ├── LICENSE                     # 📄 MIT

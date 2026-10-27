@@ -59,6 +59,7 @@ ClientIDIde = os.getenv('TRAE_CLIENT_ID', '').strip() or 'ono9krqynydwx5'   # �
 EP_EXCHANGE = OAuthHost + '/cloudide/api/v3/trae/oauth/ExchangeToken'
 EP_EXCHANGE_PROOF = UgHost + '/trae/api/v3/oauth/ExchangeToken'   # 新版：必须带设备证明
 EP_ENTITLE = UgHost + '/trae/api/v2/pay/user_current_entitlement_list'
+EP_ENT_USAGE = UgHost + '/trae/api/v2/pay/ide_user_ent_usage'
 UA = 'Trae/1.0'
 IdeVersion = '1.107.1'
 AUTH_FAIL_CODES = (1001, 1002)
@@ -473,6 +474,117 @@ def credits_summary(token, device_id, tries=3):
     return None
 
 
+def _num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _expire_key(value):
+    """把 expire_time 归一成可排序的时间戳；读不出来排到最后。"""
+    if value is None or value == '':
+        return float('inf')
+    if isinstance(value, (int, float)):
+        ts = float(value)
+        return ts / 1000.0 if ts > 100000000000 else ts
+    text = str(value).strip()
+    if not text:
+        return float('inf')
+    try:
+        ts = float(text)
+        return ts / 1000.0 if ts > 100000000000 else ts
+    except ValueError:
+        pass
+    try:
+        return datetime.datetime.fromisoformat(text.replace('Z', '+00:00')).timestamp()
+    except ValueError:
+        pass
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+        try:
+            return datetime.datetime.strptime(text, fmt).replace(
+                tzinfo=datetime.timezone.utc).timestamp()
+        except ValueError:
+            continue
+    return float('inf')
+
+
+def format_expire(value):
+    if value is None or value == '':
+        return '未知到期'
+    text = str(value).strip()
+    if isinstance(value, (int, float)) or text.replace('.', '', 1).isdigit():
+        try:
+            ts = float(text) if not isinstance(value, (int, float)) else float(value)
+            if ts > 100000000000:
+                ts /= 1000.0
+            return datetime.datetime.fromtimestamp(
+                ts, tz=datetime.timezone(datetime.timedelta(hours=8))
+            ).strftime('%Y-%m-%d %H:%M')
+        except (ValueError, OverflowError, OSError):
+            return text
+    return text
+
+
+def parse_entitlement_packs(payload):
+    """解析 ide_user_ent_usage 的 user_entitlement_pack_list。
+
+    只保留还有剩余额度的包，并按 expire_time 从早到晚排序。
+    返回字段：expire_time / credits_limit / credits_amount / remaining。
+    """
+    if not isinstance(payload, dict):
+        return []
+    root = payload.get('data') if isinstance(payload.get('data'), dict) else payload
+    packs = (root.get('user_entitlement_pack_list')
+             or payload.get('user_entitlement_pack_list') or [])
+    if not isinstance(packs, list):
+        return []
+    result = []
+    for pack in packs:
+        if not isinstance(pack, dict):
+            continue
+        base = pack.get('entitlement_base_info') or {}
+        quota = base.get('quota') or pack.get('quota') or {}
+        usage = pack.get('usage') or {}
+        limit = _num(quota.get('credits_limit'))
+        used = _num(usage.get('credits_amount'))
+        remaining = max(limit - used, 0.0)
+        if limit <= 0 or remaining <= 0:
+            continue
+        expire = pack.get('expire_time')
+        if expire is None:
+            expire = base.get('expire_time')
+        result.append({
+            'expire_time': expire,
+            'credits_limit': limit,
+            'credits_amount': used,
+            'remaining': remaining,
+        })
+    result.sort(key=lambda item: (_expire_key(item['expire_time']),
+                                  str(item['expire_time'] or '')))
+    return result
+
+
+def entitlement_usage(token, device_id, tries=1):
+    """查询积分包用量；失败返回 None，不影响原有余额查询。"""
+    for attempt in range(tries):
+        status, text = _post(
+            EP_ENT_USAGE,
+            ug_headers(token, device_id),
+            json.dumps({'require_usage': True}),
+        )
+        if status < 0:
+            time.sleep(4 + attempt * 4)
+            continue
+        if status >= 400:
+            return None
+        try:
+            return parse_entitlement_packs(json.loads(text))
+        except Exception:
+            time.sleep(4 + attempt * 4)
+    return None
+
+
 def token_ok(token, device_id):
     r = credits_summary(token, device_id, tries=1)
     if r is None:
@@ -580,6 +692,14 @@ def main():
         line = '%s：已用 %s · 剩余 %s' % (name, cs.get('used'), cs.get('remain'))
         print('💰 ' + line)
         out.append('💰 ' + line)
+        packs = entitlement_usage(token, did)
+        if packs:
+            first = packs[0]
+            line = '%s：最早到期包 %s · 剩余 %s' % (
+                name, format_expire(first['expire_time']),
+                round(first['remaining'], 2))
+            print('📦 ' + line)
+            out.append('📦 ' + line)
         ok.append(name)
         if i < len(accts) - 1:
             time.sleep(3)

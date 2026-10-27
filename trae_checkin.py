@@ -116,7 +116,8 @@ RATE_HTTP_CODES = (429, 500, 502, 503, 504)
 RATE_CODE = 9074                            # 参与用户太多（排队限流，可重试）
 REQ_SOURCE = 1                              # 客户端签到请求体固定带 {"req_source":1}
 REQ_BODY = '{"req_source": %d}' % REQ_SOURCE
-ALREADY_CODE = 9095                         # 今日已签
+# 9004 / 9095 都表示「本设备今日已签到」，不是失败。
+ALREADY_CODES = (9004, 9095)
 QYWX_URL = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key='
 PUSHPLUS_URL = 'https://www.pushplus.plus/send'
 
@@ -1092,7 +1093,7 @@ def status_of(token, device_id):
 
 
 def claim(token, device_id):
-    """签到领取积分一次，以业务 code 为准：0 成功 / 9095 今日已签 / 9074 限流可重试。
+    """签到领取积分一次，以业务 code 为准：0 成功 / 9004、9095 今日已签 / 9074 限流可重试。
     返回 (http, code, message, 本次积分)。"""
     status, text = _post(EP_CLAIM, ug_headers(token, device_id), REQ_BODY)
     try:
@@ -1121,7 +1122,7 @@ def claim_with_retry(acc, cache):
         last = (code, msg)
         if code == 0:
             return True, code, msg, points
-        if code == ALREADY_CODE:
+        if code in ALREADY_CODES:
             return False, code, msg, None
         if code in AUTH_FAIL_CODES and acc.get('refreshToken'):
             print('🔑 [claim] 检测到 code=%s，尝试刷新 token ...' % code)
@@ -1317,11 +1318,11 @@ def checkin_account(acc, cache):
             result['credits'] = credits_after if credits_after is not None else credits
             result['detail'] = '签到成功（已回查确认），积分 %s → %s' % (credits, _fmt(result['credits']))
         print('🎉 [结果] 签到成功（已回查确认）')
-    elif code == ALREADY_CODE:
+    elif code in ALREADY_CODES:
         result['icon'] = '☑️'
         result['status'] = '已签到'
         result['credits'] = credits
-        result['detail'] = '今日已签到(9095)'
+        result['detail'] = '今日已签到(%s)' % code
         print('☑️  [结果] 今日已签到')
     elif code == RATE_CODE:
         result['icon'] = '⏳'

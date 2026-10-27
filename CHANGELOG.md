@@ -1,5 +1,17 @@
 # 更新日志
 
+## v1.0.7（2026-10-27）
+
+- 修复：签到领取接口的 `9004` 与 `9095` 都表示「本设备今日已签到」，现在统一按已签成功处理，不再把 `9004` 误判为失败。
+  - 覆盖 `claim_with_retry` 与 `checkin_account` 两处分类；
+  - 新增 4 项离线回归测试，分别验证 9004 / 9095 在领取与账号结果中的分类。
+- 增强：积分监控新增只读接口 `POST /trae/api/v2/pay/ide_user_ent_usage`（请求体 `{"require_usage":true}`）。
+  - 解析 `user_entitlement_pack_list[]` 的 `expire_time`、`quota.credits_limit`、`usage.credits_amount`；
+  - 自动跳过已耗尽积分包，按到期时间排序并显示「最早到期包」；
+  - 查询失败时不影响原有余额/已用查询，签到主流程完全不受影响。
+- 测试：新增 8 项离线回归测试，全部通过；`compileall` 与 `git diff --check` 通过。
+- 说明：本轮未使用真实账号，未发送真实签到请求。
+
 ## v1.0.6（2026-10-21）
 
 - 新增：GitHub Actions 工作流 `.github/workflows/daily.yml`（默认只开手动触发，schedule 需 fork 后自行取消注释）；
