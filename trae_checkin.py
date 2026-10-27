@@ -931,6 +931,10 @@ def pick_batch(pending):
         return pending          # 默认一轮全签，9074 自动换号兜底
     if pending and in_peak_hour():
         return pending        # 早窗容量最松，一轮把剩下的全签掉（账号间照常错峰）
+    try:
+        size = max(1, int(raw))
+    except ValueError:
+        size = 1              # 非法值按 1 处理，不允许抛错打断整轮签到
     start = bj_now().tm_hour % max(1, len(pending))
     return (pending[start:] + pending[:start])[:size]
 

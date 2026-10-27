@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -134,6 +135,43 @@ class TraeEntitlementPackTests(unittest.TestCase):
     def test_missing_pack_list_is_empty(self):
         self.assertEqual([], MONITOR.parse_entitlement_packs({"data": {}}))
         self.assertEqual([], MONITOR.parse_entitlement_packs({}))
+
+
+class TraePickBatchTests(unittest.TestCase):
+    """TRAE_BATCH=<数字> 分支必须受数量约束，且非法值不得抛错。"""
+
+    def _pick(self, value, pending, peak=False):
+        with patch.dict("os.environ", {"TRAE_BATCH": value}, clear=False), \
+                patch.object(CHECKIN, "in_peak_hour", return_value=peak), \
+                patch.object(CHECKIN, "bj_now", return_value=time.gmtime(0)):
+            return CHECKIN.pick_batch(pending)
+
+    def test_batch_two_returns_two(self):
+        self.assertEqual(["a", "b"], self._pick("2", ["a", "b", "c", "d"]))
+
+    def test_batch_one_returns_one(self):
+        self.assertEqual(["a"], self._pick("1", ["a", "b", "c"]))
+
+    def test_batch_larger_than_pending_is_capped(self):
+        self.assertEqual(["a", "b", "c"], self._pick("9", ["a", "b", "c"]))
+
+    def test_invalid_value_falls_back_to_one(self):
+        self.assertEqual(["a"], self._pick("abc", ["a", "b", "c"]))
+
+    def test_all_returns_everything(self):
+        self.assertEqual(["a", "b", "c"], self._pick("all", ["a", "b", "c"]))
+
+    def test_peak_hour_returns_everything(self):
+        self.assertEqual(["a", "b", "c"], self._pick("1", ["a", "b", "c"], peak=True))
+
+    def test_rotation_uses_beijing_hour(self):
+        with patch.dict("os.environ", {"TRAE_BATCH": "1"}, clear=False), \
+                patch.object(CHECKIN, "in_peak_hour", return_value=False), \
+                patch.object(CHECKIN, "bj_now", return_value=time.gmtime(2 * 3600)):
+            self.assertEqual(["c"], CHECKIN.pick_batch(["a", "b", "c", "d"]))
+
+    def test_empty_pending_is_empty(self):
+        self.assertEqual([], self._pick("2", []))
 
 
 if __name__ == "__main__":
