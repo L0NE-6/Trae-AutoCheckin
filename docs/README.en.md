@@ -79,6 +79,10 @@ The workflow encrypts rotated token state before writing it to Actions Cache. Do
 
 Access tokens, refresh tokens, device private keys, caches, and account files must stay outside Git. Use environment variables or encrypted GitHub Secrets. Avoid refreshing the same account from multiple deployments.
 
+## Usage and redistribution
+
+The official repository, scripts, documentation, and Releases are free. Do not repackage them as paid resources, remove attribution, impersonate the author, use the author's identity or QR codes as endorsement, or repost them through unrelated accounts or groups for traffic. See the [Usage and Redistribution Notice](../NOTICE.md). Violations may result in takedown requests; the author may pause updates, archive, or delete the repository.
+
 ## Links
 
 - [Releases](https://github.com/L0NE-6/Trae-AutoCheckin/releases)
