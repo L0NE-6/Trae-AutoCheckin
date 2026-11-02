@@ -1,22 +1,39 @@
 <div align="center">
 
+<sub><strong>L0NE-6 · DAILY SIGNAL</strong></sub>
+
 # 🤖 Trae AutoCheckin
 
 **Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信推送**
 
-> 当前版本：**v1.0.7**（2026-10-27）
+> 当前版本：**v1.0.8**（2026-10-27）
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Dependencies](https://img.shields.io/badge/dependencies-none-success)](.)
-[![Platform](https://img.shields.io/badge/platform-青龙%20%7C%20本地%20%7C%20任意定时-blue)](.)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=social)](https://github.com/L0NE-6/Trae-AutoCheckin)
+[简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
-[✨ 特性](#-特性) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 配置](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题) · [☕ 投喂](#-投喂支持)
+<img src="https://img.shields.io/github/v/release/L0NE-6/Trae-AutoCheckin?style=for-the-badge&label=Release&color=2ea44f&logo=github" />
+<img src="https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=for-the-badge&label=Stars&color=FFC75F&logo=github" />
+<img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+<img src="https://img.shields.io/badge/Dependencies-zero-2EA44F?style=for-the-badge&logo=python&logoColor=white" />
+<img src="https://img.shields.io/badge/Deploy-%E9%9D%92%E9%BE%99%20%7C%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" />
+<img src="https://img.shields.io/badge/License-MIT-F472B6?style=for-the-badge" />
+<a href="https://github.com/L0NE-6/Trae-AutoCheckin/releases"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Releases-2ea44f?style=for-the-badge&logo=github" /></a>
+
+[✨ 速览](#-30-秒速览) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 环境变量](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题) · [✦ 星轨](#-星轨-star-trail)
 
 </div>
 
 ---
+
+## ✨ 30 秒速览
+
+| 维度 | 说明 |
+| :--- | :--- |
+| **做什么** | 多账号 Trae 每日签到、9074 设备号处理、Token 续期、积分只读监控与企业微信推送。 |
+| **输入** | 推荐 `TRAE_ACCOUNTS`；新版续期还需要设备 ECDSA 密钥与设备号。 |
+| **输出** | 分账号签到结果、积分余额/用量、Token 轮换缓存和可选推送。 |
+| **部署** | 青龙面板、本地定时任务、GitHub Actions。 |
+| **依赖** | 纯 Python 标准库，无需安装第三方包。 |
+| **成功判据** | `9004` / `9095` 均按今日已签处理；领取后可按配置回读确认。 |
 
 ## 📖 简介
 
@@ -481,12 +498,24 @@ Trae-AutoCheckin/
 
 ---
 
+## ✦ 星轨 Star Trail
+
+> 签到是每天的一小步，Star 是社区留下的一次确认。感谢每一个让这条自动化轨迹继续向前的人。
+
+<a href="https://star-history.com/#L0NE-6/Trae-AutoCheckin&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date" />
+    <img alt="Trae AutoCheckin Star Trail" src="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date" />
+  </picture>
+</a>
+
+---
+
 <div align="center">
 
-**如果这个项目对你有帮助，欢迎点个 ⭐ Star 支持一下！**
+**L0NE-6 · DAILY SIGNAL**
 
-**遇到问题或想改进？欢迎提 [Issues](https://github.com/L0NE-6/Trae-AutoCheckin/issues) 或发 [Pull Request](https://github.com/L0NE-6/Trae-AutoCheckin/pulls) 🚀**
-
-Made with ❤️ by [L0NE-6](https://github.com/L0NE-6)
+[Releases](https://github.com/L0NE-6/Trae-AutoCheckin/releases) · [Issues](https://github.com/L0NE-6/Trae-AutoCheckin/issues) · [Pull Requests](https://github.com/L0NE-6/Trae-AutoCheckin/pulls) · [Star](https://github.com/L0NE-6/Trae-AutoCheckin)
 
 </div>
