@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import time
 import unittest
 from contextlib import redirect_stdout
@@ -72,6 +73,78 @@ class TraeAlreadyCheckedInTests(unittest.TestCase):
         self.assertEqual("已签到", result["status"])
         self.assertEqual("☑️", result["icon"])
         self.assertIn("9095", result["detail"])
+
+
+class TraeRewardCreditsTests(unittest.TestCase):
+    def test_positive_credits_is_used(self):
+        self.assertEqual(100, CHECKIN.reward_credits({
+            "credits": 100,
+            "extra_credits": 80,
+        }))
+
+    def test_extra_credits_is_used_when_credits_is_zero(self):
+        self.assertEqual(80, CHECKIN.reward_credits({
+            "credits": 0,
+            "extra_credits": 80,
+        }))
+
+    def test_parallel_fields_are_never_summed(self):
+        self.assertEqual(100, CHECKIN.reward_credits({
+            "credits": 100,
+            "extra_credits": 100,
+        }))
+
+    def test_missing_string_bool_and_invalid_values_are_ignored(self):
+        cases = [
+            ({}, 0),
+            ({"credits": "100"}, 0),
+            ({"credits": 0, "extra_credits": "80"}, 0),
+            ({"credits": True, "extra_credits": 80}, 80),
+            ({"credits": None, "extra_credits": []}, 0),
+        ]
+        for payload, expected in cases:
+            with self.subTest(payload=payload):
+                self.assertEqual(expected, CHECKIN.reward_credits(payload))
+
+    def test_negative_values_are_not_reported(self):
+        self.assertEqual(80, CHECKIN.reward_credits({
+            "credits": -10,
+            "extra_credits": 80,
+        }))
+        self.assertEqual(0, CHECKIN.reward_credits({
+            "credits": -10,
+            "extra_credits": -20,
+        }))
+
+    def test_status_of_uses_unified_reward_value(self):
+        response = {
+            "code": 0,
+            "checked_in": False,
+            "enable": True,
+            "credits": 0,
+            "extra_credits": 75,
+        }
+        with patch.object(CHECKIN, "_post", return_value=(200, json.dumps(response))):
+            checked_in, credits, enable, code, _ = CHECKIN.status_of("token", "device")
+        self.assertFalse(checked_in)
+        self.assertEqual(75, credits)
+        self.assertTrue(enable)
+        self.assertEqual(0, code)
+
+    def test_report_uses_selected_reward_value(self):
+        account = {
+            "accessToken": "token",
+            "deviceId": "device",
+            "name": "tester",
+        }
+        with patch.object(CHECKIN, "device_id_for", return_value="device"), \
+                patch.object(CHECKIN, "status_of", return_value=(True, 75, True, 0, "{}")), \
+                patch.object(CHECKIN, "credits_summary", return_value=None):
+            with redirect_stdout(io.StringIO()):
+                result = CHECKIN.checkin_account(account, {})
+        self.assertEqual("已签到", result["status"])
+        self.assertEqual(75, result["credits"])
+        self.assertIn("积分 75", result["detail"])
 
 
 class TraeEntitlementPackTests(unittest.TestCase):

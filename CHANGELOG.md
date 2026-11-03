@@ -1,5 +1,12 @@
 # 更新日志
 
+## v1.0.9（2026-11-04）
+
+- 修复：签到状态解析只读取 `credits`。当服务端返回 `credits=0`、`extra_credits>0` 时，本地会把本次签到积分误显示为 0。
+- 行为：新增统一的 `reward_credits()` 解析入口；`credits > 0` 时使用 `credits`，否则使用正的 `extra_credits`。两个字段是并列分量，绝不相加；缺失、字符串、布尔和负数等异常值不会进入展示。
+- 测试：新增 7 项离线回归，覆盖 `credits > 0`、`credits=0 + extra_credits>0`、两者并存、缺失/字符串/负数异常、状态查询及报告路径；测试总数 23 项，`py_compile`、`unittest`、`git diff --check` 通过。
+- 说明：本轮未使用真实账号，未发送真实签到请求。
+
 ## v1.0.8（2026-10-27）
 
 - 修复：**`TRAE_BATCH=<数字>` 必崩** —— `pick_batch()` 在非早窗时段取用了从未定义的 `size`，只要把 `TRAE_BATCH` 设成 `1` / `2` / 任意数字，且当前不在早窗时段，整轮签到直接 `NameError` 退出。
