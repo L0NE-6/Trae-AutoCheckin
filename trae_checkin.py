@@ -100,10 +100,85 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
 
 import base64, glob, hashlib, json, os, platform, random, re, sys, time, urllib.request, urllib.error
 
+# ══════════════════ 统一配置层：TRAE_CONFIG 收拢全部配置 ══════════════════
+#
+# TRAE_CONFIG 示例（JSON）：
+#   {"accounts":[{"refreshToken":"xxx"}], "device":{"keyPem":"...", "machineId":"...", "deviceId":"..."},
+#    "push":{"qywxToken":"...", "plusplusToken":"..."}, "schedule":{"only":"", "batch":"all"},
+#    "clientId":"ono9krqynydwx5", "tokenCache":""}
+#
+# TRAE_CONFIG 未设置时，自动回退到分散的旧环境变量（TRAE_CLIENT_ID / QYWX_TOKEN 等）。
+
+_CFG = {}
+_CFG_LOADED = False
+
+
+def _load_cfg():
+    """尝试从 TRAE_CONFIG 解析配置，失败则保持空字典。"""
+    global _CFG, _CFG_LOADED
+    if _CFG_LOADED:
+        return _CFG
+    _CFG_LOADED = True
+    raw = os.getenv('TRAE_CONFIG', '').strip()
+    if not raw:
+        return _CFG
+    try:
+        _CFG = json.loads(raw)
+        if not isinstance(_CFG, dict):
+            print('[配置] TRAE_CONFIG 必须是 JSON 对象，已忽略。', file=sys.stderr)
+            _CFG = {}
+    except Exception as e:
+        print('[配置] TRAE_CONFIG 解析失败: %s（将回退到分散环境变量）' % e, file=sys.stderr)
+        _CFG = {}
+    return _CFG
+
+
+def _cfg(path, default='', env=None):
+    """先查 TRAE_CONFIG（支持点号路径如 device.keyPem），找不到回退到 env 指定的旧环境变量。"""
+    _load_cfg()
+    cur = _CFG
+    for part in path.split('.'):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            cur = None
+            break
+    if cur is not None and cur != '':
+        if isinstance(cur, bool):
+            return cur
+        return str(cur).strip() if isinstance(cur, str) else cur
+    if env:
+        v = os.getenv(env, '')
+        if v != '':
+            return v.strip() if isinstance(v, str) else v
+    return default
+
+
+def _cfg_int(path, default, env=None):
+    v = _cfg(path, '', env)
+    try:
+        return int(str(v))
+    except (ValueError, TypeError):
+        return default
+
+
+def _cfg_bool(path, default, env=None):
+    v = _cfg(path, '', env)
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower()
+    if s in ('1', 'true', 'yes', 'on'):
+        return True
+    if s in ('0', 'false', 'no', 'off', ''):
+        return False
+    return default
+
+
+
 UgHost = 'https://api.trae.cn'
 OAuthHost = 'https://api.trae.com.cn'
 ClientID = 'en1oxy7wnw8j9n'          # 旧客户端 / 旧 token 用
-ClientIDIde = os.getenv('TRAE_CLIENT_ID', '').strip() or 'ono9krqynydwx5'   # 桌面端实测值（新版续期必须）
+ClientIDIde = _cfg('clientId', '', 'TRAE_CLIENT_ID') or 'ono9krqynydwx5'   # 桌面端实测值（新版续期必须）
 IdeVersion = '1.107.1'
 UA = 'Trae/%s' % IdeVersion
 EP_STATUS = UgHost + '/trae/api/v2/ug/checkin_credits/status'
@@ -122,8 +197,8 @@ QYWX_URL = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key='
 PUSHPLUS_URL = 'https://www.pushplus.plus/send'
 
 # 企业微信 / PushPlus 推送配置（留空则不推送）
-PLUSPLUS_TOKEN = (os.getenv('PLUSPLUS_TOKEN') or os.getenv('PLUSHPLUS_TOKEN') or os.getenv('PUSHPLUS_TOKEN') or '').strip()
-QYWX_TOKEN = os.getenv('QYWX_TOKEN') or os.getenv('WECHAT_WEBHOOK') or ''
+PLUSPLUS_TOKEN = _cfg('push.plusplusToken', '', 'PLUSPLUS_TOKEN') or _cfg('push.plusplusToken', '', 'PLUSHPLUS_TOKEN') or _cfg('push.plusplusToken', '', 'PUSHPLUS_TOKEN')
+QYWX_TOKEN = _cfg('push.qywxToken', '', 'QYWX_TOKEN') or _cfg('push.qywxToken', '', 'WECHAT_WEBHOOK') or ''
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEVICE_ID_FILE = os.path.join(HERE, '.trae_device_ids.json')
