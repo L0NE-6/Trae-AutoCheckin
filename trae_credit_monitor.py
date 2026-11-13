@@ -52,6 +52,126 @@ TRAE_DEVICE_ID           设备号（16 位，与上面三个配套）
 
 import base64, datetime, hashlib, json, os, platform, sys, time, urllib.request, urllib.error
 
+
+# ══════════════════ TRAE_CONFIG 统一适配层 ══════════════════
+# 配置生成器产出的 TRAE_CONFIG（JSON）在此统一翻译成旧环境变量，其余代码零改动：
+#   • 未设置 / 为空 / JSON 非法 → 不做任何事，原有环境变量与默认值照常生效
+#   • 已设置 → 仅把「有值」的字段写入 os.environ（生成器只输出非默认值），
+#     即 TRAE_CONFIG 优先于同名旧变量；未覆盖的旧变量不受影响
+# 本板块必须位于所有 os.getenv 之前（含下方模块级常量），与 trae_checkin.py 保持一致。
+def _apply_trae_config():
+    def _config_log(message, stream=None):
+        """配置层日志必须兼容 Windows GBK 控制台，失败时用替换字符降级。"""
+        stream = stream or sys.stdout
+        try:
+            stream.write(message + '\n')
+            stream.flush()
+        except UnicodeEncodeError:
+            encoding = getattr(stream, 'encoding', None) or 'ascii'
+            safe = message.encode(encoding, 'replace').decode(encoding)
+            stream.write(safe + '\n')
+            stream.flush()
+
+    raw = os.getenv('TRAE_CONFIG', '').strip()
+    if not raw:
+        return
+    try:
+        cfg = json.loads(raw)
+    except Exception as e:
+        _config_log('[WARN] [TRAE_CONFIG] invalid JSON (%s); existing environment left unchanged'
+                    % type(e).__name__, sys.stderr)
+        return
+    if not isinstance(cfg, dict):
+        _config_log('[WARN] [TRAE_CONFIG] root value is not an object; existing environment left unchanged',
+                    sys.stderr)
+        return
+
+    set_names = set()
+    overridden = []   # 只记录变量名，凭据值绝不能进入日志
+
+    def put(name, value):
+        if value is None:
+            return
+        if isinstance(value, bool):
+            value = '1' if value else '0'
+        value = str(value).strip()
+        if value:
+            old = os.environ.get(name)
+            if old is not None and old != value:
+                overridden.append(name)
+            os.environ[name] = value
+            set_names.add(name)
+
+    # 顶层标量
+    for key, env in (('clientId', 'TRAE_CLIENT_ID'),
+                     ('tokenCache', 'TRAE_TOKEN_CACHE'),
+                     ('accountDir', 'TRAE_ACCOUNT_DIR'),
+                     ('storagePath', 'TRAE_STORAGE_PATH')):
+        put(env, cfg.get(key))
+
+    # 设备证明与设备描述
+    dev = cfg.get('device') or {}
+    if isinstance(dev, dict):
+        for key, env in (('keyPem', 'TRAE_DEVICE_KEY_PEM'),
+                         ('pubPem', 'TRAE_DEVICE_PUB_PEM'),
+                         ('machineId', 'TRAE_MACHINE_ID'),
+                         ('deviceId', 'TRAE_DEVICE_ID'),
+                         ('name', 'TRAE_DEVICE_NAME'),
+                         ('model', 'TRAE_DEVICE_MODEL'),
+                         ('brand', 'TRAE_DEVICE_BRAND')):
+            put(env, dev.get(key))
+
+    # 推送
+    push = cfg.get('push') or {}
+    if isinstance(push, dict):
+        put('QYWX_TOKEN', push.get('qywxToken'))
+        put('PLUSPLUS_TOKEN', push.get('plusplusToken'))
+
+    # 调度
+    sch = cfg.get('schedule') or {}
+    if isinstance(sch, dict):
+        for key, env in (('only', 'TRAE_ONLY'),
+                         ('batch', 'TRAE_BATCH'),
+                         ('peakHours', 'TRAE_PEAK_HOURS'),
+                         ('cooldownMin', 'TRAE_COOLDOWN_MIN'),
+                         ('peakCooldownMin', 'TRAE_PEAK_COOLDOWN_MIN'),
+                         ('claimTries', 'CLAIM_TRIES'),
+                         ('jitter', 'TRAE_JITTER'),
+                         ('rotate', 'TRAE_ROTATE'),
+                         ('verifyClaim', 'TRAE_VERIFY_CLAIM'),
+                         ('circuit', 'TRAE_CIRCUIT')):
+            put(env, sch.get(key))
+
+    # 账号：重新序列化成旧版 TRAE_ACCOUNTS JSON 数组（字段名已兼容，直接透传）。
+    # accessToken / icubeAuth / storagePath 都是原脚本支持的独立凭据来源。
+    accs = cfg.get('accounts')
+    if isinstance(accs, list):
+        items = [dict(a) for a in accs
+                 if isinstance(a, dict) and any(
+                     str(a.get(key) or '').strip()
+                     for key in ('refreshToken', 'accessToken', 'icubeAuth', 'storagePath'))]
+        if items:
+            val = json.dumps(items, ensure_ascii=False)
+            old = os.environ.get('TRAE_ACCOUNTS')
+            if old is not None and old != val:
+                overridden.append('TRAE_ACCOUNTS')
+            os.environ['TRAE_ACCOUNTS'] = val
+            set_names.add('TRAE_ACCOUNTS')
+
+    # 成功摘要：对齐原脚本「配置决策点打一行」的习惯（未配置时保持静默）
+    if set_names:
+        _config_log('[OK] [TRAE_CONFIG] translated %d fields -> %s'
+                    % (len(set_names), ', '.join(sorted(set_names))))
+        if overridden:
+            _config_log('[WARN] [TRAE_CONFIG] overrode existing variables: %s'
+                        % ', '.join(sorted(set(overridden))), sys.stderr)
+    else:
+        _config_log('[WARN] [TRAE_CONFIG] no usable fields; existing environment left unchanged',
+                    sys.stderr)
+
+
+_apply_trae_config()
+
 UgHost = 'https://api.trae.cn'
 OAuthHost = 'https://api.trae.com.cn'
 ClientID = 'en1oxy7wnw8j9n'          # 旧客户端 / 旧 token 用
@@ -418,7 +538,8 @@ def persist_refresh_token(uid, new_rt, seed_rt):
 
 def get_token(idx, rt_env, did_env, cache, force_refresh=False, keys=None, at_env=''):
     key = str(idx)
-    did = real_device_id() or did_env or stable_device_id(rt_env)
+    # 账号级 realDeviceId/deviceId 与账号设备证明绑定，优先于本机其它登录态。
+    did = did_env or real_device_id() or stable_device_id(rt_env)
     ent = cache.get(key) or {}
     at = ent.get('accessToken')
     rt_cache = ent.get('refreshToken')
@@ -635,7 +756,8 @@ def load_accounts():
             # 拿不到时由 get_token 回落到环境变量里那套通用密钥。
             priv = norm_pem(a.get('deviceKeyPem', ''))
             pub = norm_pem(a.get('devicePubPem', ''))
-            did = a.get('deviceId', '').strip()
+            # realDeviceId 来自客户端真实登录态，优先于可手填/生成的历史 deviceId。
+            did = str(a.get('realDeviceId') or a.get('deviceId') or '').strip()
             keys = None
             if priv and pub and did:
                 keys = {'deviceId': did, 'privateKeyPem': priv, 'publicKeyPem': pub,

@@ -1,5 +1,18 @@
 # 更新日志
 
+## v1.1.0（2026-11-13）
+
+- 新增 `TRAE_CONFIG` 统一 JSON 配置层：签到与积分监控脚本都可从单变量读取账号、设备、推送和调度配置，同时继续兼容原有环境变量。
+- 新增 Windows「配置生成器」：支持读取本机 Trae 凭据、导入旧配置、生成 `TRAE_CONFIG`，并保留账号级设备证明、`realDeviceId`、`icubeAuth` 和 `storagePath` 字段。
+- `refreshToken-only` 账号现在可直接加载，并在首次运行时走原有自动换 AT 流程；签到脚本的续期设备证明和积分监控均优先使用账号级 `realDeviceId`。
+- 安全加固：配置适配日志只输出变量名，不输出凭据值或前缀；Windows GBK 控制台不再因新日志崩溃。
+- 配置页下载敏感 JSON 需要二次确认，清空表单同步清空导入框、账号、设备名称/型号/品牌和旧凭据。
+- 本地 relay 增加 Host/Origin/Referer 校验、`X-Frame-Options: DENY`、CSP `frame-ancestors 'none'`、一次性提取令牌和多标签页租约；跨站 iframe 无法触发凭据提取或关闭中继。
+- Windows 重复启动复用同一实例；端口探测移除 `SO_REUSEADDR`，HTTP server 使用原子 bind，避免被已有监听器误导。
+- 启动 VBS 改为可审阅的 ASCII + CRLF 文本，并在 `.gitattributes` 中固定文本属性。
+- 测试：新增配置层、GBK、导入导出、relay 生命周期、iframe、双标签、端口占用和 Windows 启动回归；`55` 项测试及子测试通过，Python/Node 语法、敏感扫描与 `git diff --check` 通过。
+- 说明：本轮未调用真实 Trae 刷新或签到接口，未读取真实 Trae storage，未包含账号、Token 或设备凭据。
+
 ## v1.0.9（2026-11-04）
 
 - 修复：签到状态解析只读取 `credits`。当服务端返回 `credits=0`、`extra_credits>0` 时，本地会把本次签到积分误显示为 0。

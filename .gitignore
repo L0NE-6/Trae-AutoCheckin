@@ -11,6 +11,8 @@ trae_token.json
 trae_sms_accounts.json
 storage.json
 *accounts*.json
+trae-credentials.txt
+*credentials*
 
 # ---- 密钥 / 环境变量 ----
 .env
@@ -30,3 +32,6 @@ venv/
 *.log
 *.bak
 .DS_Store
+
+# ---- 防止 trae_get_token.py 副本入库（relay 自动查找同目录/上一级目录）----
+配置生成器/trae_get_token.py

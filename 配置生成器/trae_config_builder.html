@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae AutoCheckin · 配置生成器</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --line: #e3e6ea;
+    --text: #1f2329;
+    --muted: #8a919c;
+    --primary: #2b6ef6;
+    --primary-dark: #1f57c9;
+    --danger: #e5484d;
+    --ok: #1a7f37;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 20px 60px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; font-weight: 600; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 13px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 15px;
+    margin: 0 0 4px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card .hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+  .grid { display: grid; gap: 12px; }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 760px) {
+    .g2, .g3, .g4 { grid-template-columns: 1fr; }
+  }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+  textarea { resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .row {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fafbfc;
+    position: relative;
+  }
+  .row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--text);
+    padding: 7px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--primary); color: var(--primary); }
+  button.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+  button.primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+  button.del {
+    padding: 3px 10px;
+    font-size: 12px;
+    color: var(--danger);
+    border-color: #f3c9ca;
+  }
+  button.del:hover { background: #fff1f1; border-color: var(--danger); }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 20px;
+    background: #eef3ff;
+    color: var(--primary);
+    font-weight: 500;
+  }
+  .warn {
+    background: #fff8e6;
+    border: 1px solid #ffe0a3;
+    color: #8a6100;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    margin-bottom: 16px;
+  }
+  .ok-tip { color: var(--ok); font-size: 12px; margin-left: 8px; opacity: 0; transition: opacity .2s; }
+  .ok-tip.show { opacity: 1; }
+  .inline { display: flex; align-items: center; gap: 8px; }
+  .inline input[type=checkbox] { width: auto; }
+  code { background: #eef0f3; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .toggle input { margin: 0; }
+  details { margin-top: 10px; }
+  details > summary {
+    font-size: 12px;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 4px 0;
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: '▸ '; }
+  details[open] > summary::before { content: '▾ '; }
+  .hint-mini {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .pin {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f0f3f8;
+    color: var(--muted);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Trae AutoCheckin · 配置生成器</h1>
+  <p class="sub">双击 <code>启动.vbs</code> 会自动读取本机凭据；也可手动填。生成后复制 JSON，填到环境变量 <code>TRAE_CONFIG</code>。</p>
+
+  <div class="warn">
+    <code>refreshToken</code>、<code>accessToken</code> 与设备私钥等同账号密码，勿外发。页面纯本地运行，不联网、不上传。
+  </div>
+
+  <!-- 一键解析 -->
+  <div class="card">
+    <h2>自动读取 / 粘贴解析 <span class="pin">账号 + 设备</span></h2>
+    <p class="hint">三种来源任选其一：<br>
+    ① 通过 <code>启动.vbs</code> 打开时点「读取本机凭据」（需 Python）；<br>
+    ② 双击 <code>无python独立提取凭据.bat</code> 生成 <code>trae-credentials.txt</code>，再点「读取凭据文件」选择它（无需 Python）；<br>
+    ③ 也可把终端输出直接粘贴到下面，再点「解析并填充」——例如运行<br>
+    <code>python trae_get_token.py --accounts</code> 与 <code>--export-keys</code>（脚本与本页面同目录或上一级目录均可，与「读取本机凭据」等价）。</p>
+    <textarea id="autoBox" rows="6" placeholder="粘贴终端输出，例如：&#10;TRAE_DEVICE_ID=1234567890123456&#10;TRAE_MACHINE_ID=abc...&#10;TRAE_DEVICE_KEY_PEM=-----BEGIN EC PRIVATE KEY-----\nMHc...&#10;或&#10;[{&quot;refreshToken&quot;:&quot;xxx=.1234&quot;,&quot;uid&quot;:&quot;123&quot;,&quot;name&quot;:&quot;主号&quot;}]"></textarea>
+    <div class="toolbar">
+      <button onclick="document.getElementById('filePick').click()">读取凭据文件</button>
+      <input type="file" id="filePick" accept=".txt,.json,text/plain" style="display:none" onchange="importFile(this)">
+      <button class="primary" onclick="autoParse()">解析并填充</button>
+      <button onclick="document.getElementById('autoBox').value=''">清空粘贴框</button>
+      <span class="ok-tip" id="autoTip">已填充</span>
+    </div>
+  </div>
+
+  <!-- 导入 -->
+  <div class="card">
+    <h2>导入已有配置</h2>
+    <p class="hint">粘贴已有的 <code>TRAE_CONFIG</code>，或旧版 <code>TRAE_ACCOUNTS</code> 数组。</p>
+    <textarea id="importBox" rows="5" placeholder='{"accounts":[{"refreshToken":"xxx=.1234","uid":"主号"}],"device":{"keyPem":"...","pubPem":"...","machineId":"abc","deviceId":"1234"}}'></textarea>
+    <div class="toolbar">
+      <button class="primary" onclick="importJson()">导入到表单</button>
+      <button onclick="resetForm()">清空表单</button>
+      <span class="ok-tip" id="impTip">已导入</span>
+    </div>
+  </div>
+
+  <!-- 账号列表 -->
+  <div class="card">
+    <h2>账号 <span class="badge" id="accCount">0</span></h2>
+    <p class="hint">refreshToken / accessToken / icubeAuth / storagePath 至少填一项；监控脚本需要 refreshToken；设备密钥可在账号级单独填写，也可用下方全局配置。</p>
+    <div id="accounts"></div>
+    <div class="toolbar">
+      <button class="primary" onclick="addAccount()">+ 添加账号</button>
+      <span class="ok-tip" id="accTip">已添加</span>
+    </div>
+  </div>
+
+  <!-- 设备证明（新版续期必需） -->
+  <div class="card">
+    <h2>设备证明 <span class="pin">新版续期必需</span></h2>
+    <p class="hint">来自 <code>--export-keys</code> 输出，4 个值需配对使用。</p>
+    <div class="grid g2">
+      <div>
+        <label>ECDSA 私钥 PEM（TRAE_DEVICE_KEY_PEM）</label>
+        <textarea id="devKey" rows="5" placeholder="-----BEGIN EC PRIVATE KEY-----&#10;MHcCAQEEI...&#10;-----END EC PRIVATE KEY-----"
+          oninput="render()"></textarea>
+      </div>
+      <div>
+        <label>ECDSA 公钥 PEM（TRAE_DEVICE_PUB_PEM）</label>
+        <textarea id="devPub" rows="5" placeholder="-----BEGIN PUBLIC KEY-----&#10;MFkwEwYHKoZIzj0CAQY...&#10;-----END PUBLIC KEY-----"
+          oninput="render()"></textarea>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:12px">
+      <div>
+        <label>设备 machineId（TRAE_MACHINE_ID）</label>
+        <input type="text" id="devMid" placeholder="abc123456" oninput="render()">
+      </div>
+      <div>
+        <label>设备号 deviceId（TRAE_DEVICE_ID）</label>
+        <input type="text" id="devDid" placeholder="1234567890123456" oninput="render()">
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:12px">
+      <div>
+        <label>设备名（TRAE_DEVICE_NAME）</label>
+        <input type="text" id="devName" placeholder="留空使用主机名" oninput="render()">
+      </div>
+      <div>
+        <label>设备型号（TRAE_DEVICE_MODEL）</label>
+        <input type="text" id="devModel" placeholder="可选" oninput="render()">
+      </div>
+      <div>
+        <label>设备品牌（TRAE_DEVICE_BRAND）</label>
+        <input type="text" id="devBrand" placeholder="可选" oninput="render()">
+      </div>
+    </div>
+    <div class="hint-mini">PEM 里的 <code>\n</code> 与本页面会自动兼容，原样粘贴即可。</div>
+  </div>
+
+  <!-- 推送渠道 -->
+  <div class="card">
+    <h2>推送渠道</h2>
+    <p class="hint">留空则不推送。两种可同时填写。</p>
+    <div class="grid g2">
+      <div>
+        <label>企业微信机器人 key（QYWX_TOKEN）</label>
+        <input type="text" id="qywx" placeholder="webhook 地址中 key= 之后的部分"
+          oninput="render()">
+      </div>
+      <div>
+        <label>PushPlus token（PLUSPLUS_TOKEN）</label>
+        <input type="text" id="pp" placeholder="PushPlus token" oninput="render()">
+      </div>
+    </div>
+  </div>
+
+  <!-- 调度参数 -->
+  <div class="card">
+    <h2>调度与签到策略</h2>
+    <p class="hint">都有默认值，一般不用改。</p>
+    <div class="grid g3">
+      <div>
+        <label>仅跑指定账号（TRAE_ONLY）</label>
+        <input type="text" id="schOnly" placeholder="序号或 uid，留空=全部" oninput="render()">
+      </div>
+      <div>
+        <label>每轮签几个（TRAE_BATCH）</label>
+        <select id="schBatch" onchange="render()">
+          <option value="">全部（默认）</option>
+          <option value="1">每轮 1 个（按小时轮换）</option>
+          <option value="2">每轮 2 个</option>
+          <option value="3">每轮 3 个</option>
+        </select>
+      </div>
+      <div>
+        <label>早窗小时（TRAE_PEAK_HOURS）</label>
+        <input type="text" id="schPeak" value="0" placeholder="0 或 0,23 或 0-1" oninput="render()">
+      </div>
+      <div>
+        <label>平时冷却（分钟，TRAE_COOLDOWN_MIN）</label>
+        <input type="number" id="schCool" min="1" value="55" oninput="render()">
+      </div>
+      <div>
+        <label>早窗冷却（分钟，TRAE_PEAK_COOLDOWN_MIN）</label>
+        <input type="number" id="schPCool" min="1" value="12" oninput="render()">
+      </div>
+      <div>
+        <label>9074 后重试次数（CLAIM_TRIES）</label>
+        <input type="number" id="schTries" min="1" value="1" oninput="render()">
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="inline">
+        <input type="checkbox" id="schJit" checked onchange="render()">
+        <label style="margin:0">启动随机抖动 0~20 秒（TRAE_JITTER）</label>
+      </div>
+      <div class="inline">
+        <input type="checkbox" id="schRotate" checked onchange="render()">
+        <label style="margin:0">9074 后在真实设备号之间切换（TRAE_ROTATE）</label>
+      </div>
+      <div class="inline">
+        <input type="checkbox" id="schVerify" checked onchange="render()">
+        <label style="margin:0">领取后回查确认（TRAE_VERIFY_CLAIM）</label>
+      </div>
+      <div class="inline">
+        <input type="checkbox" id="schCircuit" onchange="render()">
+        <label style="margin:0">熔断：任一账号 9074 就整体停止（TRAE_CIRCUIT）</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 高级设置 -->
+  <div class="card">
+    <h2>高级设置</h2>
+    <p class="hint">通常不用填。</p>
+    <details>
+      <summary>展开高级字段</summary>
+      <div class="grid g2" style="margin-top:12px">
+        <div>
+          <label>ClientID（TRAE_CLIENT_ID）</label>
+          <input type="text" id="advClient" placeholder="ono9krqynydwx5（默认）" oninput="render()">
+        </div>
+        <div>
+          <label>Token 缓存路径（TRAE_TOKEN_CACHE）</label>
+          <input type="text" id="advCache" placeholder="留空用脚本同目录" oninput="render()">
+        </div>
+        <div>
+          <label>账号 JSON 目录（TRAE_ACCOUNT_DIR）</label>
+          <input type="text" id="advAccDir" placeholder="留空用脚本同目录" oninput="render()">
+        </div>
+        <div>
+          <label>桌面端 storage.json 路径（TRAE_STORAGE_PATH）</label>
+          <input type="text" id="advStorage" placeholder="留空自动查找" oninput="render()">
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- 输出 -->
+  <div class="card">
+    <h2>生成的 JSON <span class="pin" id="byteCount">0 字符</span></h2>
+    <p class="hint">复制后填入环境变量 <code>TRAE_CONFIG</code>。只有非默认值会写进来，字段都可省略。</p>
+    <div class="warn" id="dupWarn" style="display:none"></div>
+    <textarea id="output" rows="16" readonly onclick="this.select()"></textarea>
+    <div class="toolbar">
+      <button class="primary" onclick="copyJson()">复制 JSON</button>
+      <button onclick="downloadJson()">下载 trae_config.json</button>
+      <span class="ok-tip" id="tip">已复制</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const uid = () => Math.random().toString(36).slice(2, 9);
+const ACCOUNT_FIELDS = [
+  'name', 'uid', 'refreshToken', 'accessToken', 'deviceId', 'realDeviceId',
+  'deviceKeyPem', 'devicePubPem', 'machineId', 'icubeAuth', 'storagePath'
+];
+
+function blankAccount() {
+  return {
+    id: uid(), name: '', uid: '', refreshToken: '', accessToken: '', deviceId: '',
+    realDeviceId: '', deviceKeyPem: '', devicePubPem: '', machineId: '',
+    icubeAuth: '', storagePath: ''
+  };
+}
+
+function accountHasCredential(a) {
+  return Boolean(String(a.refreshToken || '').trim()
+    || String(a.accessToken || '').trim()
+    || String(a.icubeAuth || '').trim()
+    || String(a.storagePath || '').trim());
+}
+
+function accountCredentialKey(a) {
+  return String(a.refreshToken || a.accessToken || a.icubeAuth || a.storagePath || '').trim();
+}
+
+function cleanAccount(a) {
+  const out = {};
+  ACCOUNT_FIELDS.forEach(key => {
+    const value = key === 'deviceKeyPem' || key === 'devicePubPem'
+      ? trimPem(a[key])
+      : String(a[key] || '').trim();
+    if (value) out[key] = value;
+  });
+  return out;
+}
+
+function accountFromRaw(a) {
+  const account = blankAccount();
+  if (!a || typeof a !== 'object') return account;
+  Object.assign(account, cleanAccount({
+    name: a.name || a.nickname || '',
+    uid: a.uid || a.userId || '',
+    refreshToken: a.refreshToken || a.refresh_token || '',
+    accessToken: a.accessToken || a.access_token || '',
+    deviceId: a.deviceId || a.device_id || '',
+    realDeviceId: a.realDeviceId || '',
+    deviceKeyPem: a.deviceKeyPem || a.device_key_pem || '',
+    devicePubPem: a.devicePubPem || a.device_pub_pem || '',
+    machineId: a.machineId || a.machine_id || '',
+    icubeAuth: a.icubeAuth || '',
+    storagePath: a.storagePath || ''
+  }));
+  return account;
+}
+
+let state = {
+  accounts: [blankAccount()]
+};
+
+// ---------- 账号 ----------
+function addAccount() {
+  state.accounts.push(blankAccount());
+  renderAccounts(); render();
+}
+function delAccount(id) {
+  state.accounts = state.accounts.filter(a => a.id !== id);
+  if (!state.accounts.length) {
+    state.accounts.push(blankAccount());
+  }
+  renderAccounts(); render();
+}
+function updAccount(id, key, val) {
+  const a = state.accounts.find(x => x.id === id);
+  if (a) { a[key] = val; render(); }
+}
+
+function renderAccounts() {
+  const box = document.getElementById('accounts');
+  box.innerHTML = '';
+  document.getElementById('accCount').textContent = state.accounts.length;
+
+  state.accounts.forEach((a, i) => {
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = `
+      <div class="row-head">
+        <span>账号 ${i + 1}</span>
+        <button class="del" onclick="delAccount('${a.id}')">删除</button>
+      </div>
+      <div class="grid g2">
+        <div><label>显示名（可选）</label>
+          <input type="text" value="${esc(a.name)}" placeholder="主号"
+            oninput="updAccount('${a.id}','name',this.value)"></div>
+        <div><label>uid（可选，用于日志与缓存键）</label>
+          <input type="text" value="${esc(a.uid)}" placeholder="不填自动用序号"
+            oninput="updAccount('${a.id}','uid',this.value)"></div>
+      </div>
+      <div style="margin-top:10px">
+        <label>refreshToken（可选 · 形如 xxxabc=.18dxxx）</label>
+        <textarea rows="2" placeholder="AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCD=.0000000000000000"
+          oninput="updAccount('${a.id}','refreshToken',this.value)">${esc(a.refreshToken)}</textarea>
+      </div>
+      <details style="margin-top:8px">
+        <summary>accessToken / 桌面端凭据（可选）</summary>
+        <div class="grid g2" style="margin-top:8px">
+          <div>
+            <label>accessToken</label>
+            <textarea rows="2" placeholder="eyJhbGciOi..."
+              oninput="updAccount('${a.id}','accessToken',this.value)">${esc(a.accessToken)}</textarea>
+          </div>
+          <div>
+            <label>icubeAuth（storage.json 加密串）</label>
+            <textarea rows="2" placeholder="粘贴 iCubeAuthInfo 的值"
+              oninput="updAccount('${a.id}','icubeAuth',this.value)">${esc(a.icubeAuth)}</textarea>
+          </div>
+          <div>
+            <label>storagePath</label>
+            <input type="text" value="${esc(a.storagePath)}" placeholder="客户端 storage.json 路径"
+              oninput="updAccount('${a.id}','storagePath',this.value)">
+          </div>
+        </div>
+      </details>
+      <details style="margin-top:6px">
+        <summary>账号级设备材料（可选，留空使用全局）</summary>
+        <div class="grid g2" style="margin-top:8px">
+          <div>
+            <label>deviceId</label>
+            <input type="text" value="${esc(a.deviceId)}" placeholder="1234567890123456"
+              oninput="updAccount('${a.id}','deviceId',this.value)">
+          </div>
+          <div>
+            <label>realDeviceId</label>
+            <input type="text" value="${esc(a.realDeviceId)}" placeholder="客户端真实设备号"
+              oninput="updAccount('${a.id}','realDeviceId',this.value)">
+          </div>
+          <div>
+            <label>machineId</label>
+            <input type="text" value="${esc(a.machineId)}" placeholder="telemetry.machineId"
+              oninput="updAccount('${a.id}','machineId',this.value)">
+          </div>
+          <div>
+            <label>deviceKeyPem</label>
+            <textarea rows="3" placeholder="-----BEGIN EC PRIVATE KEY-----"
+              oninput="updAccount('${a.id}','deviceKeyPem',this.value)">${esc(a.deviceKeyPem)}</textarea>
+          </div>
+          <div>
+            <label>devicePubPem</label>
+            <textarea rows="3" placeholder="-----BEGIN PUBLIC KEY-----"
+              oninput="updAccount('${a.id}','devicePubPem',this.value)">${esc(a.devicePubPem)}</textarea>
+          </div>
+        </div>
+      </details>
+    `;
+    box.appendChild(div);
+  });
+}
+
+// ---------- 构建 JSON ----------
+function buildConfig() {
+  const cfg = {};
+
+  // --- accounts：保留任一脚本支持的凭据来源 ---
+  const accs = state.accounts
+    .filter(accountHasCredential)
+    .map(cleanAccount);
+  if (accs.length) cfg.accounts = accs;
+
+  // --- device：设备证明与描述字段任意一个有值就打包 ---
+  const dv = {
+    keyPem: trimPem(document.getElementById('devKey').value),
+    pubPem: trimPem(document.getElementById('devPub').value),
+    machineId: String(document.getElementById('devMid').value || '').trim(),
+    deviceId: String(document.getElementById('devDid').value || '').trim(),
+    name: String(document.getElementById('devName').value || '').trim(),
+    model: String(document.getElementById('devModel').value || '').trim(),
+    brand: String(document.getElementById('devBrand').value || '').trim()
+  };
+  const anyDv = dv.keyPem || dv.pubPem || dv.machineId || dv.deviceId
+    || dv.name || dv.model || dv.brand;
+  if (anyDv) {
+    cfg.device = {};
+    if (dv.keyPem) cfg.device.keyPem = dv.keyPem;
+    if (dv.pubPem) cfg.device.pubPem = dv.pubPem;
+    if (dv.machineId) cfg.device.machineId = dv.machineId;
+    if (dv.deviceId) cfg.device.deviceId = dv.deviceId;
+    if (dv.name) cfg.device.name = dv.name;
+    if (dv.model) cfg.device.model = dv.model;
+    if (dv.brand) cfg.device.brand = dv.brand;
+  }
+
+  // --- push ---
+  const qywx = String(document.getElementById('qywx').value || '').trim();
+  const pp = String(document.getElementById('pp').value || '').trim();
+  if (qywx || pp) {
+    cfg.push = {};
+    if (qywx) cfg.push.qywxToken = qywx;
+    if (pp) cfg.push.plusplusToken = pp;
+  }
+
+  // --- schedule ---
+  const sc = {};
+  const schOnly = String(document.getElementById('schOnly').value || '').trim();
+  const schBatch = String(document.getElementById('schBatch').value || '').trim();
+  const schPeak = String(document.getElementById('schPeak').value || '').trim();
+  const schCool = String(document.getElementById('schCool').value || '').trim();
+  const schPCool = String(document.getElementById('schPCool').value || '').trim();
+  const schTries = String(document.getElementById('schTries').value || '').trim();
+  if (schOnly) sc.only = schOnly;
+  if (schBatch && schBatch !== '全部（默认）') sc.batch = schBatch;
+  if (schPeak && schPeak !== '0') sc.peakHours = schPeak;
+  if (schCool && schCool !== '55') sc.cooldownMin = Number(schCool);
+  if (schPCool && schPCool !== '12') sc.peakCooldownMin = Number(schPCool);
+  if (schTries && schTries !== '1') sc.claimTries = Number(schTries);
+  if (!document.getElementById('schJit').checked) sc.jitter = false;
+  if (!document.getElementById('schRotate').checked) sc.rotate = false;
+  if (!document.getElementById('schVerify').checked) sc.verifyClaim = false;
+  if (document.getElementById('schCircuit').checked) sc.circuit = true;
+  if (Object.keys(sc).length) cfg.schedule = sc;
+
+  // --- 高级 ---
+  const advClient = String(document.getElementById('advClient').value || '').trim();
+  const advCache = String(document.getElementById('advCache').value || '').trim();
+  const advAccDir = String(document.getElementById('advAccDir').value || '').trim();
+  const advStorage = String(document.getElementById('advStorage').value || '').trim();
+  if (advClient) cfg.clientId = advClient;
+  if (advCache) cfg.tokenCache = advCache;
+  if (advAccDir) cfg.accountDir = advAccDir;
+  if (advStorage) cfg.storagePath = advStorage;
+
+  return cfg;
+}
+
+/** PEM 里的 \n 两种格式统一保留原样——脚本里 norm_pem 会自行处理 */
+function trimPem(v) { return String(v || '').trim(); }
+
+// ---------- 渲染输出 ----------
+function render() {
+  const out = document.getElementById('output');
+  const cfg = buildConfig();
+  const text = JSON.stringify(cfg, null, 2);
+  out.value = text;
+  document.getElementById('byteCount').textContent = text.length + ' 字符';
+}
+
+function flash(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1600);
+}
+
+function copyJson() {
+  const ta = document.getElementById('output');
+  ta.select();
+  navigator.clipboard.writeText(ta.value)
+    .then(() => flash('tip'))
+    .catch(() => { document.execCommand('copy'); flash('tip'); });
+}
+
+function configContainsSecrets(cfg) {
+  return Boolean((Array.isArray(cfg.accounts) && cfg.accounts.length)
+    || (cfg.device && Object.keys(cfg.device).length)
+    || (cfg.push && Object.keys(cfg.push).length));
+}
+
+function downloadJson() {
+  const cfg = buildConfig();
+  if (configContainsSecrets(cfg)
+      && !confirm('下载文件包含账号 token、设备密钥或推送凭据，确认保存到本机？')) {
+    return;
+  }
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trae_config.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 0);
+}
+
+// ---------- 一键解析终端输出 ----------
+/** PEM 从终端复制过来时换行是字面量 \n，统一还原成真实换行 */
+function unescapePem(v) {
+  return String(v || '').replace(/\\n/g, '\n').trim();
+}
+
+/** 从整段文本里揪出 JSON 数组（--accounts 的整行输出，可能夹在分隔线中间） */
+function pickJsonArray(raw) {
+  const s = raw.indexOf('[');
+  const e = raw.lastIndexOf(']');
+  if (s < 0 || e <= s) return null;
+  try {
+    const v = JSON.parse(raw.slice(s, e + 1));
+    return Array.isArray(v) ? v : null;
+  } catch (e2) {
+    return null;
+  }
+}
+
+function autoParse() {
+  const raw = document.getElementById('autoBox').value || '';
+  if (!raw.trim()) { alert('请先把终端输出粘贴到上面的输入框'); return; }
+
+  // 1) KEY=VALUE 形式（--export-keys / 默认单账号模式）
+  const kv = {};
+  const re = /^\s*(TRAE_[A-Z0-9_]+)\s*=\s*(.+?)\s*$/gm;
+  let m;
+  while ((m = re.exec(raw)) !== null) kv[m[1]] = m[2];
+
+  // 2) JSON 数组形式（--accounts 模式）
+  const parsed = pickJsonArray(raw);
+  const found = [];
+
+  if (Array.isArray(parsed) && parsed.length) {
+    parsed.forEach(a => {
+      if (!a || typeof a !== 'object') return;
+      if (!accountHasCredential(a)) return;
+      found.push(accountFromRaw(a));
+    });
+  }
+
+  // 3) 单个 refreshToken
+  if (!found.length) {
+    const rt = (kv.TRAE_REFRESH_TOKEN || kv.TRAE_REFRESH_TOKEN_1 || '').trim();
+    if (rt) found.push({ id: uid(), name: '', uid: '', refreshToken: rt, accessToken: (kv.TRAE_ACCESS_TOKEN || '').trim(), deviceId: '' });
+  }
+
+  // 4) 回填设备 / 推送
+  let devHit = 0;
+  const setDev = (id, v) => { if (v) { document.getElementById(id).value = v; devHit++; } };
+  setDev('devDid', (kv.TRAE_DEVICE_ID || '').trim());
+  setDev('devMid', (kv.TRAE_MACHINE_ID || '').trim());
+  setDev('devKey', unescapePem(kv.TRAE_DEVICE_KEY_PEM));
+  setDev('devPub', unescapePem(kv.TRAE_DEVICE_PUB_PEM));
+  if (kv.QYWX_TOKEN || kv.WECHAT_WEBHOOK) document.getElementById('qywx').value = (kv.QYWX_TOKEN || kv.WECHAT_WEBHOOK).trim();
+  if (kv.PLUSPLUS_TOKEN || kv.PUSHPLUS_TOKEN) document.getElementById('pp').value = (kv.PLUSPLUS_TOKEN || kv.PUSHPLUS_TOKEN).trim();
+
+  if (!found.length && !devHit) {
+    alert('没识别出可用的凭据。\n请确认粘贴的是 trae_get_token.py 的完整输出（含 TRAE_DEVICE_KEY_PEM=... 或 [{"refreshToken":...}]）。');
+    return;
+  }
+
+  // 5) 合并账号：清掉空行，按首选凭据去重追加
+  if (found.length) {
+    const kept = state.accounts.filter(accountHasCredential);
+    const seen = new Set(kept.map(accountCredentialKey).filter(Boolean));
+    found.forEach(a => {
+      const key = accountCredentialKey(a);
+      if (key && !seen.has(key)) { kept.push(a); seen.add(key); }
+    });
+    state.accounts = kept.length ? kept : found;
+    renderAccounts();
+  }
+
+  render();
+
+  const tip = document.getElementById('autoTip');
+  tip.textContent = `已填充：${found.length} 个账号 / ${devHit} 个设备字段`;
+  flash('autoTip');
+}
+
+// ---------- 读取凭据文件（手动选择 无python独立提取凭据.bat 生成的 trae-credentials.txt） ----------
+function importFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    set('autoBox', String(reader.result || ''));
+    autoParse();
+  };
+  reader.readAsText(f, 'utf-8');
+  input.value = '';
+}
+
+// ---------- 导入 ----------
+function applyConfigToForm(cfg) {
+  if (!cfg || typeof cfg !== 'object') throw new Error('导入内容不是合法 JSON 对象');
+
+  // accounts
+  if (Array.isArray(cfg.accounts)) {
+    state.accounts = cfg.accounts.length ? cfg.accounts.map(accountFromRaw) : [blankAccount()];
+  } else if (!Array.isArray(cfg)) {
+    state.accounts = [blankAccount()];
+  }
+
+  // 也兼容旧版 TRAE_ACCOUNTS 数组（直接就是账号数组，不带外层 {accounts: [...]}）
+  if (Array.isArray(cfg)) {
+    state.accounts = cfg.map(accountFromRaw);
+  }
+
+  const dev = cfg.device || {};
+  set('devKey', dev.keyPem || '');
+  set('devPub', dev.pubPem || '');
+  set('devMid', dev.machineId || '');
+  set('devDid', dev.deviceId || '');
+  set('devName', dev.name || '');
+  set('devModel', dev.model || '');
+  set('devBrand', dev.brand || '');
+
+  const push = cfg.push || {};
+  set('qywx', push.qywxToken || '');
+  set('pp', push.plusplusToken || '');
+
+  const sc = cfg.schedule || {};
+  set('schOnly', sc.only || '');
+  set('schBatch', sc.batch || '');
+  set('schPeak', sc.peakHours !== undefined ? sc.peakHours : '0');
+  set('schCool', sc.cooldownMin !== undefined ? sc.cooldownMin : '55');
+  set('schPCool', sc.peakCooldownMin !== undefined ? sc.peakCooldownMin : '12');
+  set('schTries', sc.claimTries !== undefined ? sc.claimTries : '1');
+  document.getElementById('schJit').checked = sc.jitter !== false;
+  document.getElementById('schRotate').checked = sc.rotate !== false;
+  document.getElementById('schVerify').checked = sc.verifyClaim !== false;
+  document.getElementById('schCircuit').checked = sc.circuit === true;
+
+  set('advClient', cfg.clientId || '');
+  set('advCache', cfg.tokenCache || '');
+  set('advAccDir', cfg.accountDir || '');
+  set('advStorage', cfg.storagePath || '');
+
+  renderAccounts(); render();
+}
+
+function set(id, v) { document.getElementById(id).value = v == null ? '' : v; }
+
+function importJson() {
+  const box = document.getElementById('importBox');
+  const raw = box.value.trim();
+  if (!raw) { alert('请先把要导入的 JSON 粘贴到上面的输入框'); return; }
+  try {
+    applyConfigToForm(JSON.parse(raw));
+    flash('impTip');
+  } catch (e) {
+    alert('导入失败：' + e.message);
+  }
+}
+
+function resetForm() {
+  if (!confirm('确定清空当前表单？清空后无法恢复。')) return;
+  // 原地清空，不刷新页面（刷新会被本地中继重新读取凭据并弹出选择提示）
+  state.accounts = [blankAccount()];
+  ['devKey', 'devPub', 'devMid', 'devDid', 'devName', 'devModel', 'devBrand',
+   'qywx', 'pp', 'schOnly', 'autoBox', 'importBox',
+   'advClient', 'advCache', 'advAccDir', 'advStorage'].forEach(id => set(id, ''));
+  set('schBatch', '');
+  set('schPeak', '0');
+  set('schCool', '55');
+  set('schPCool', '12');
+  set('schTries', '1');
+  document.getElementById('schJit').checked = true;
+  document.getElementById('schRotate').checked = true;
+  document.getElementById('schVerify').checked = true;
+  document.getElementById('schCircuit').checked = false;
+  renderAccounts();
+  render();
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+(function init() {
+  renderAccounts();
+  render();
+})();
+</script>
+</body>
+</html>

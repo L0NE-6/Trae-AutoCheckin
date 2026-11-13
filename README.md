@@ -6,7 +6,7 @@
 
 **Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信推送**
 
-> 当前版本：**v1.0.9**（2026-11-04）
+> 当前版本：**v1.1.0**（2026-11-13）
 
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
