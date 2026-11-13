@@ -6,7 +6,7 @@
 
 **Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信推送**
 
-> 当前版本：**v1.1.0**（2026-11-13）
+> 当前版本：**v1.1.0**（2026-11-13） · 最新更新：TRAE_CONFIG 统一配置、Windows 配置生成器与 relay 安全加固
 
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
