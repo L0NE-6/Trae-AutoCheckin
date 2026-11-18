@@ -83,6 +83,8 @@ jobs:
           PLUSPLUS_TOKEN: ${{ secrets.PLUSPLUS_TOKEN }}
           PLUSHPLUS_TOKEN: ${{ secrets.PLUSHPLUS_TOKEN }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python trae_checkin.py
 
       - name: Encrypt state

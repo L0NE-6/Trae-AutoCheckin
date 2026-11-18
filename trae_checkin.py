@@ -64,6 +64,8 @@ Trae AutoCheckin · Trae 每日自动签到（抗 9074 限流版）
   TRAE_ACCOUNT_DIR         账号 JSON 所在目录（可选，用于回写轮换后的 refreshToken）
   QYWX_TOKEN               企业微信群机器人 Webhook key（可选，也兼容 WECHAT_WEBHOOK）
   PLUSPLUS_TOKEN           PushPlus token（可选；兼容 PLUSHPLUS_TOKEN / PUSHPLUS_TOKEN）
+  TG_BOT_TOKEN             Telegram 机器人 token（可选，形如 123456:ABC...，由 @BotFather 获取）
+  TG_CHAT_ID               Telegram 接收消息的 chat id（可选，与 TG_BOT_TOKEN 同时填写才推送）
 
   TRAE_ACCOUNTS 每个账号对象支持的字段：
     accessToken / refreshToken  明文 token（可只给 refreshToken，脚本自动换取）
@@ -244,6 +246,9 @@ PUSHPLUS_URL = 'https://www.pushplus.plus/send'
 # 企业微信 / PushPlus 推送配置（留空则不推送）
 PLUSPLUS_TOKEN = (os.getenv('PLUSPLUS_TOKEN') or os.getenv('PLUSHPLUS_TOKEN') or os.getenv('PUSHPLUS_TOKEN') or '').strip()
 QYWX_TOKEN = os.getenv('QYWX_TOKEN') or os.getenv('WECHAT_WEBHOOK') or ''
+TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN', '').strip()
+TG_CHAT_ID = os.getenv('TG_CHAT_ID', '').strip()
+TG_API_URL = 'https://api.telegram.org/bot%s/sendMessage'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEVICE_ID_FILE = os.path.join(HERE, '.trae_device_ids.json')
@@ -1362,9 +1367,33 @@ def notify_pushplus(title, content):
         print('❌ [PushPlus] 推送失败: %s' % e)
 
 
+def notify_telegram(title, text):
+    """Telegram 机器人推送（纯文本）；未配置 TG_BOT_TOKEN / TG_CHAT_ID 则跳过。"""
+    if not (TG_BOT_TOKEN and TG_CHAT_ID):
+        return False
+    try:
+        body = ('%s\n%s' % (title, text)) if title else text
+        if len(body) > 4000:  # Telegram 单条消息上限 4096 字符
+            body = body[:4000]
+        req = urllib.request.Request(TG_API_URL % TG_BOT_TOKEN,
+                                    data=json.dumps({'chat_id': TG_CHAT_ID,
+                                                     'text': body,
+                                                     'disable_web_page_preview': True}).encode('utf-8'),
+                                    headers={'Content-Type': 'application/json'}, method='POST')
+        res = json.loads(urllib.request.urlopen(req, timeout=10).read().decode('utf-8'))
+        ok = bool(res.get('ok'))
+        print('%s [Telegram] 推送%s' % ('✅' if ok else '❌', '成功' if ok else '失败'))
+        return ok
+    except Exception as e:
+        # 异常信息可能包含请求 URL（含 token），这里不原样打印
+        print('❌ [Telegram] 推送异常: %s' % type(e).__name__)
+        return False
+
+
 def push(title, text):
     notify(text, title)
     notify_pushplus(title, text)
+    notify_telegram(title, text)
 
 
 # ══════════════════ 单个账号处理 ══════════════════
