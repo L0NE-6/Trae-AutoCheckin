@@ -60,6 +60,9 @@ Fork 후 Actions를 활성화하고 `TRAE_ACCOUNTS`, `TRAE_DEVICE_KEY_PEM`, `TRA
 | `TRAE_MACHINE_ID` | 기기 machineId |
 | `TRAE_CACHE_KEY` | Actions 캐시 암호화 키 |
 | `QYWX_TOKEN` | 선택형 WeCom Bot 키 |
+| `PLUSPLUS_TOKEN` | 선택형 PushPlus 토큰 (`PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` 호환) |
+| `TG_BOT_TOKEN` | 선택형 Telegram Bot 토큰 (`@BotFather`에서 발급) |
+| `TG_CHAT_ID` | 선택형 Telegram chat ID (`TG_BOT_TOKEN`과 함께 설정) |
 
 ## 보안
 

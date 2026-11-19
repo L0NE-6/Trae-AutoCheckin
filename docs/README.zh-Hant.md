@@ -64,6 +64,9 @@ Fork 並啟用 Actions 後，設定 `TRAE_ACCOUNTS`、`TRAE_DEVICE_KEY_PEM`、`T
 | `TRAE_MACHINE_ID` | 裝置 machineId |
 | `TRAE_CACHE_KEY` | Actions 狀態快取加密金鑰 |
 | `QYWX_TOKEN` | 可選企業微信機器人 key |
+| `PLUSPLUS_TOKEN` | 可選 PushPlus token（亦兼容 `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN`） |
+| `TG_BOT_TOKEN` | 可選 Telegram Bot token（由 `@BotFather` 取得） |
+| `TG_CHAT_ID` | 可選 Telegram chat id；需與 `TG_BOT_TOKEN` 同時設定 |
 
 ## 安全提醒
 

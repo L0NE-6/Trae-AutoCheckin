@@ -4,9 +4,9 @@
 
 # 🤖 Trae AutoCheckin
 
-**Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信推送**
+**Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信 / PushPlus / Telegram 推送**
 
-> 当前版本：**v1.1.0**（2026-11-13） · 最新更新：TRAE_CONFIG 统一配置、Windows 配置生成器与 relay 安全加固
+> 当前版本：**v1.2.0**（2026-11-19） · 最新更新：新增可选 Telegram Bot 推送，日志不泄露 bot token
 
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
@@ -44,9 +44,9 @@
 
 | 维度 | 说明 |
 | :--- | :--- |
-| **做什么** | 多账号 Trae 每日签到、9074 设备号处理、Token 续期、积分只读监控与企业微信推送。 |
+| **做什么** | 多账号 Trae 每日签到、9074 设备号处理、Token 续期、积分只读监控，以及企业微信 / PushPlus / Telegram 推送。 |
 | **输入** | 推荐 `TRAE_ACCOUNTS`；新版续期还需要设备 ECDSA 密钥与设备号。 |
-| **输出** | 分账号签到结果、积分余额/用量、Token 轮换缓存和可选推送。 |
+| **输出** | 分账号签到结果、积分余额/用量、Token 轮换缓存和可选多渠道推送。 |
 | **部署** | 青龙面板、本地定时任务、GitHub Actions。 |
 | **依赖** | 纯 Python 标准库，无需安装第三方包。 |
 | **成功判据** | `9004` / `9095` 均按今日已签处理；领取后可按配置回读确认。 |
@@ -80,7 +80,7 @@
 - 🧮 **签到积分不叠加** — 展示值优先取正的 `credits`；否则取正的 `extra_credits`，两者绝不相加
 - 📱 **稳定设备号** — 优先用客户端真实设备号，拿不到才按账号生成固定 16 位
 - 📦 **积分包到期** — 积分监控可读取积分包额度/用量，跳过耗尽包并提示最早到期包
-- 📤 **微信推送** — 签到 / 积分结果推送到企业微信机器人
+- 📤 **多渠道推送** — 签到 / 积分结果推送到企业微信、PushPlus 或 Telegram
 - 🌐 **网页登录** — 真浏览器走官网 OAuth 拿 Token，验证码/滑块都在浏览器里完成
 - 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
 
@@ -248,7 +248,7 @@ python trae_credit_monitor.py   # 查积分
    - `TRAE_ACCOUNTS`（推荐）或旧版 `TRAE_REFRESH_TOKEN`；
    - `TRAE_DEVICE_KEY_PEM` / `TRAE_DEVICE_PUB_PEM` / `TRAE_MACHINE_ID` / `TRAE_DEVICE_ID`（新版续期必需）；
    - `TRAE_CACHE_KEY`（必填）：自己生成一个足够长的随机字符串，用于加密轮换 token 缓存；
-   - `QYWX_TOKEN` / `PLUSPLUS_TOKEN`（可选）。
+   - `QYWX_TOKEN` / `PLUSPLUS_TOKEN` / `TG_BOT_TOKEN` + `TG_CHAT_ID`（可选）。
 3. 打开 `.github/workflows/daily.yml`，取消 `schedule` 两行注释（默认北京时间 00:23 运行）；
 4. 先手动执行一次 workflow，确认签到成功；之后每天自动运行。
 
@@ -289,6 +289,8 @@ python trae_credit_monitor.py   # 查积分
 | `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（换号才是正解，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` / `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` | ➖ | PushPlus token（任选其一，优先识别 `PLUSPLUS_TOKEN`） |
+| `TG_BOT_TOKEN` | ➖ | Telegram Bot token（由 `@BotFather` 获取） |
+| `TG_CHAT_ID` | ➖ | Telegram 接收消息的 chat id；与 `TG_BOT_TOKEN` 同时填写才推送 |
 
 > 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
 

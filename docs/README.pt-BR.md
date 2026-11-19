@@ -60,6 +60,9 @@ Não renove a mesma conta simultaneamente no Qinglong e no Actions.
 | `TRAE_MACHINE_ID` | machineId do dispositivo |
 | `TRAE_CACHE_KEY` | Chave de criptografia do cache do Actions |
 | `QYWX_TOKEN` | Chave opcional de bot do WeCom |
+| `PLUSPLUS_TOKEN` | Token opcional do PushPlus (`PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` também funcionam) |
+| `TG_BOT_TOKEN` | Token opcional de bot do Telegram obtido no `@BotFather` |
+| `TG_CHAT_ID` | Chat ID opcional do Telegram; use junto com `TG_BOT_TOKEN` |
 
 ## Segurança
 

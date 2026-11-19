@@ -247,5 +247,57 @@ class TraePickBatchTests(unittest.TestCase):
         self.assertEqual([], self._pick("2", []))
 
 
+class TraeTelegramPushTests(unittest.TestCase):
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def test_unconfigured_skips_request(self):
+        with patch.object(CHECKIN, "TG_BOT_TOKEN", ""), \
+                patch.object(CHECKIN, "TG_CHAT_ID", ""), \
+                patch.object(CHECKIN.urllib.request, "urlopen") as urlopen:
+            self.assertFalse(CHECKIN.notify_telegram("title", "body"))
+        urlopen.assert_not_called()
+
+    def test_success_posts_truncated_body(self):
+        with patch.object(CHECKIN, "TG_BOT_TOKEN", "bot-token"), \
+                patch.object(CHECKIN, "TG_CHAT_ID", "chat-id"), \
+                patch.object(
+                    CHECKIN.urllib.request, "urlopen",
+                    return_value=self.Response({"ok": True}),
+                ) as urlopen:
+            self.assertTrue(CHECKIN.notify_telegram("title", "x" * 5000))
+        request = urlopen.call_args.args[0]
+        self.assertTrue(request.full_url.endswith("/botbot-token/sendMessage"))
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual("chat-id", payload["chat_id"])
+        self.assertEqual(4000, len(payload["text"]))
+        self.assertTrue(payload["disable_web_page_preview"])
+
+    def test_failed_response_returns_false(self):
+        with patch.object(CHECKIN, "TG_BOT_TOKEN", "bot-token"), \
+                patch.object(CHECKIN, "TG_CHAT_ID", "chat-id"), \
+                patch.object(
+                    CHECKIN.urllib.request, "urlopen",
+                    return_value=self.Response({"ok": False}),
+                ):
+            self.assertFalse(CHECKIN.notify_telegram("title", "body"))
+
+    def test_exception_does_not_leak_bot_token(self):
+        output = io.StringIO()
+        with patch.object(CHECKIN, "TG_BOT_TOKEN", "secret-bot-token"), \
+                patch.object(CHECKIN, "TG_CHAT_ID", "chat-id"), \
+                patch.object(
+                    CHECKIN.urllib.request, "urlopen",
+                    side_effect=RuntimeError("secret-bot-token"),
+                ), redirect_stdout(output):
+            self.assertFalse(CHECKIN.notify_telegram("title", "body"))
+        self.assertNotIn("secret-bot-token", output.getvalue())
+        self.assertIn("RuntimeError", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

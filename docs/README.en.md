@@ -58,7 +58,7 @@ Fork the repository, enable Actions, and configure these Secrets:
 - `TRAE_DEVICE_ID`
 - `TRAE_MACHINE_ID`
 - `TRAE_CACHE_KEY`
-- Optional: `QYWX_TOKEN` or a supported PushPlus variable
+- Optional: `QYWX_TOKEN`, a supported PushPlus variable, or `TG_BOT_TOKEN` + `TG_CHAT_ID`
 
 The workflow encrypts rotated token state before writing it to Actions Cache. Do not run Qinglong and Actions for the same account at the same time.
 
@@ -74,6 +74,9 @@ The workflow encrypts rotated token state before writing it to Actions Cache. Do
 | `TRAE_MACHINE_ID` | Device machine identifier |
 | `TRAE_CACHE_KEY` | Encryption key for Actions state cache |
 | `QYWX_TOKEN` | Optional WeCom bot webhook key |
+| `PLUSPLUS_TOKEN` | Optional PushPlus token (`PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` also work) |
+| `TG_BOT_TOKEN` | Optional Telegram Bot token from `@BotFather` |
+| `TG_CHAT_ID` | Optional Telegram chat ID; required together with `TG_BOT_TOKEN` |
 
 ## Security
 

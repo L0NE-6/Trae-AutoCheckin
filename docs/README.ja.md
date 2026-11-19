@@ -60,6 +60,9 @@ Fork して Actions を有効化し、`TRAE_ACCOUNTS`、`TRAE_DEVICE_KEY_PEM`、
 | `TRAE_MACHINE_ID` | デバイス machineId |
 | `TRAE_CACHE_KEY` | Actions キャッシュ暗号化キー |
 | `QYWX_TOKEN` | 任意の WeCom Bot キー |
+| `PLUSPLUS_TOKEN` | 任意の PushPlus トークン（`PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` も可） |
+| `TG_BOT_TOKEN` | 任意の Telegram Bot トークン（`@BotFather` から取得） |
+| `TG_CHAT_ID` | 任意の Telegram chat ID（`TG_BOT_TOKEN` と同時に設定） |
 
 ## セキュリティ
 
