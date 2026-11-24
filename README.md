@@ -6,7 +6,7 @@
 
 **Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信 / PushPlus / Telegram 推送**
 
-> 当前版本：**v1.2.1**（2026-11-24） · 最新更新：签到改为每轮临时 16 位设备号，登录与续期继续使用真实设备证明
+> 当前版本：**v1.2.2**（2026-11-24） · 最新更新：完善 9074 单发回归测试与 Windows 控制台兼容性，业务脚本沿用 v1.2.1
 
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 

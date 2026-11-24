@@ -55,10 +55,11 @@ class TraeAlreadyCheckedInTests(unittest.TestCase):
         with patch.dict(os.environ, {"CLAIM_TRIES": "5"}), patch.object(
             CHECKIN, "claim", return_value=(200, 9074, "too many", None)
         ) as claim:
-            ok, code, msg, points = CHECKIN.claim_with_retry(
-                {"accessToken": "token", "deviceId": "device", "refreshToken": "refresh"},
-                {},
-            )
+            with redirect_stdout(io.StringIO()):
+                ok, code, msg, points = CHECKIN.claim_with_retry(
+                    {"accessToken": "token", "deviceId": "device", "refreshToken": "refresh"},
+                    {},
+                )
         self.assertFalse(ok)
         self.assertEqual(9074, code)
         self.assertEqual("too many", msg)
