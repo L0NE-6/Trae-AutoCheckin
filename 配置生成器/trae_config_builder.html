@@ -312,19 +312,11 @@
         <label>早窗冷却（分钟，TRAE_PEAK_COOLDOWN_MIN）</label>
         <input type="number" id="schPCool" min="1" value="12" oninput="render()">
       </div>
-      <div>
-        <label>9074 后重试次数（CLAIM_TRIES）</label>
-        <input type="number" id="schTries" min="1" value="1" oninput="render()">
-      </div>
     </div>
     <div class="grid g2" style="margin-top:14px">
       <div class="inline">
         <input type="checkbox" id="schJit" checked onchange="render()">
         <label style="margin:0">启动随机抖动 0~20 秒（TRAE_JITTER）</label>
-      </div>
-      <div class="inline">
-        <input type="checkbox" id="schRotate" checked onchange="render()">
-        <label style="margin:0">9074 后在真实设备号之间切换（TRAE_ROTATE）</label>
       </div>
       <div class="inline">
         <input type="checkbox" id="schVerify" checked onchange="render()">
@@ -585,15 +577,12 @@ function buildConfig() {
   const schPeak = String(document.getElementById('schPeak').value || '').trim();
   const schCool = String(document.getElementById('schCool').value || '').trim();
   const schPCool = String(document.getElementById('schPCool').value || '').trim();
-  const schTries = String(document.getElementById('schTries').value || '').trim();
   if (schOnly) sc.only = schOnly;
   if (schBatch && schBatch !== '全部（默认）') sc.batch = schBatch;
   if (schPeak && schPeak !== '0') sc.peakHours = schPeak;
   if (schCool && schCool !== '55') sc.cooldownMin = Number(schCool);
   if (schPCool && schPCool !== '12') sc.peakCooldownMin = Number(schPCool);
-  if (schTries && schTries !== '1') sc.claimTries = Number(schTries);
   if (!document.getElementById('schJit').checked) sc.jitter = false;
-  if (!document.getElementById('schRotate').checked) sc.rotate = false;
   if (!document.getElementById('schVerify').checked) sc.verifyClaim = false;
   if (document.getElementById('schCircuit').checked) sc.circuit = true;
   if (Object.keys(sc).length) cfg.schedule = sc;
@@ -787,9 +776,7 @@ function applyConfigToForm(cfg) {
   set('schPeak', sc.peakHours !== undefined ? sc.peakHours : '0');
   set('schCool', sc.cooldownMin !== undefined ? sc.cooldownMin : '55');
   set('schPCool', sc.peakCooldownMin !== undefined ? sc.peakCooldownMin : '12');
-  set('schTries', sc.claimTries !== undefined ? sc.claimTries : '1');
   document.getElementById('schJit').checked = sc.jitter !== false;
-  document.getElementById('schRotate').checked = sc.rotate !== false;
   document.getElementById('schVerify').checked = sc.verifyClaim !== false;
   document.getElementById('schCircuit').checked = sc.circuit === true;
 
