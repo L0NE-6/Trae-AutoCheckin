@@ -4,28 +4,30 @@
 
 # 🤖 Trae AutoCheckin
 
-**Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信 / PushPlus / Telegram 推送**
+**Trae 每日自动签到与积分监控 · 零依赖 · 多账号 · 企业微信 / PushPlus / Telegram 推送**
 
-> 当前版本：**v1.2.4**（2026-11-24） · 最新更新：修复配置生成器重置表单的旧控件引用，9074 固定单发冷却
+> 当前版本：**v1.2.4**（2026-11-24） · 认证方式：refreshToken / accessToken / 设备证明
 
-[简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
+**[简体中文](README.md)** · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
-<img src="https://img.shields.io/github/v/release/L0NE-6/Trae-AutoCheckin?style=for-the-badge&label=Release&color=2ea44f&logo=github" />
-<img src="https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=for-the-badge&label=Stars&color=FFC75F&logo=github" />
-<img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" />
-<img src="https://img.shields.io/badge/Dependencies-zero-2EA44F?style=for-the-badge&logo=python&logoColor=white" />
-<img src="https://img.shields.io/badge/Deploy-%E9%9D%92%E9%BE%99%20%7C%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" />
-<img src="https://img.shields.io/badge/License-MIT-F472B6?style=for-the-badge" />
-<a href="https://github.com/L0NE-6/Trae-AutoCheckin/releases"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Releases-2ea44f?style=for-the-badge&logo=github" /></a>
+9074 冷却 · Token 轮换 · 多账号 · 积分监控 · 配置生成器 · 青龙 · Actions
 
-[✨ 速览](#-30-秒速览) · [🔑 获取 Token](#-获取-refreshtoken新手必看) · [🚀 快速开始](#-快速开始) · [⚙️ 环境变量](#️-环境变量) · [🧠 原理](#-工作原理) · [❓ FAQ](#-常见问题) · [🚫 使用边界](#usage-policy) · [✦ 星轨](#-星轨-star-trail)
+<img src="https://img.shields.io/badge/Version-v1.2.4-2ea44f?style=for-the-badge&logo=github" alt="Version v1.2.4" />
+<img src="https://img.shields.io/github/stars/L0NE-6/Trae-AutoCheckin?style=for-the-badge&label=Stars&color=FFC75F&logo=github" alt="Stars" />
+<img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+" />
+<img src="https://img.shields.io/badge/Qinglong-ready-4EAA25?style=for-the-badge" alt="Qinglong" />
+<img src="https://img.shields.io/badge/GitHub%20Actions-supported-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions" />
+
+[边界](#policy) · [速览](#overview) · [协议](#protocol) · [凭据](#credentials) · [快速开始](#quickstart) · [青龙](#qinglong) · [Actions](#actions) · [CLI](#cli) · [结果码](#result-codes) · [成功判据](#success) · [测试](#tests) · [目录](#layout) · [版本](#release) · [赞赏](#donate) · [反馈](#feedback)
 
 </div>
 
 ---
 
-<a id="usage-policy"></a>
-## 🚫 使用边界与转载声明
+<a id="policy"></a>
+## 🚫 使用边界
+
+### 🚫 使用边界与转载声明
 
 > [!IMPORTANT]
 > **官方版本永久免费。** 未经作者书面许可，禁止付费包装、搬运引流、冒充作者，或使用作者身份与二维码制造官方授权假象。违规内容可能被要求下架；作者可暂停更新、归档或删除仓库及相关 Release。
@@ -40,7 +42,12 @@
 
 ---
 
+---
+
+<a id="overview"></a>
 ## ✨ 30 秒速览
+
+### ✨ 30 秒速览
 
 | 维度 | 说明 |
 | :--- | :--- |
@@ -51,7 +58,12 @@
 | **依赖** | 纯 Python 标准库，无需安装第三方包。 |
 | **成功判据** | `9004` / `9095` 均按今日已签处理；领取后可按配置回读确认。 |
 
-## 📖 简介
+---
+
+<a id="what"></a>
+## 🧭 这是什么
+
+### 📖 简介
 
 **Trae AutoCheckin** 是一套用于 Trae 的积分自动化工具，包含 4 个独立脚本：
 
@@ -66,302 +78,20 @@
 
 ---
 
-## ✨ 特性
-
-- 🪶 **零依赖** — 只用 Python 标准库，开箱即用
-- 🛡️ **9074 冷却** — 本轮命中后按账号冷却，不反复轰接口
-- 🚀 **一轮全签** — 默认每轮把所有未签账号全签掉，每账号使用独立临时设备号
-- 🔐 **Token 缓存** — 复用未过期的 `accessToken`，失效才续期，减少请求
-- ⛓️ **链式续期** — 自动处理 `refreshToken` 轮换并回写，长期不失效
-- 🔁 **产品线回退** — 续期自动在 IDE（Trae CN）/ SOLO（TRAE SOLO CN）两套钥匙间回退，两类客户端提取的 token 都能续
-- 👥 **多账号** — 支持任意数量账号，环境变量即可配置
-- 📅 **当日跳过** — 已签成功的账号后续运行零请求，不重复消耗
-- ✅ **9004 / 9095 同日已签** — 两个业务码都按「今日已签到」处理，不再误报失败
-- 🧮 **签到积分不叠加** — 展示值优先取正的 `credits`；否则取正的 `extra_credits`，两者绝不相加
-- 📱 **设备分离** — 登录 / 续期使用真实设备证明，签到每轮新建 16 位数字设备号
-- 📦 **积分包到期** — 积分监控可读取积分包额度/用量，跳过耗尽包并提示最早到期包
-- 📤 **多渠道推送** — 签到 / 积分结果推送到企业微信、PushPlus 或 Telegram
-- 🌐 **网页登录** — 真浏览器走官网 OAuth 拿 Token，验证码/滑块都在浏览器里完成
-- 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
-
 ---
 
-## 🔑 获取 refreshToken（新手必看）
+<a id="protocol"></a>
+## 🔁 协议与回读
 
-> 这是**唯一**需要你手动准备的东西，弄到它就大功告成。
+### 主链路
 
-### ✅ 方式一：一键提取（推荐 · 免抓包）
+脚本从 Trae 客户端登录态或 `TRAE_ACCOUNTS` 读取账号，使用 refresh token 换取 access token，提交签到 claim，再读取 entitlement 余额。
 
-本仓库自带 `trae_get_token.py`，会自动从 Trae 客户端读取并解密登录凭据，**零依赖、不联网、不上传**。
+### 9074 与回读
 
-```bash
-# 1. 先在电脑上打开 Trae 客户端并登录你的账号
-# 2. 运行提取脚本
-python trae_get_token.py
+每账号每轮最多提交一次 claim，命中 `9074` 或 `429/5xx` 时只给当前账号记冷却。签到后用 entitlement 接口回读真实积分余额。
 
-# 3. 终端会打印出（直接复制等号后面的那串）：
-#    TRAE_REFRESH_TOKEN = AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCD=.0000000000000000
-```
-
-复制到青龙面板 **环境变量** → 新建变量：
-
-| 变量名 | 值 |
-| :--- | :--- |
-| `TRAE_REFRESH_TOKEN` | 粘贴上面复制的那串 |
-
-> ⚠️ **单账号只填 `TRAE_REFRESH_TOKEN` 就够了**（脚本会自动换取 accessToken）。
-> `TRAE_ACCESS_TOKEN` 和 `TRAE_REFRESH_TOKEN` 是**两串不同的值**：accessToken 是 `eyJ` 开头的长 JWT，refreshToken 形如 `xxx=.18dxxx`。
-> 两个填成同一个值会直接报「鉴权失败（硬失败）」——新版脚本会提前拦截并提示，不会白跑一轮。
-
-**多账号**：直接运行下面这条，会自动把本机登录态和账号目录里的凭据合成一个 `TRAE_ACCOUNTS` 数组：
-
-```bash
-python trae_get_token.py --accounts
-```
-
-输出一行 JSON，整行复制到 `TRAE_ACCOUNTS` 环境变量即可（字段说明见下方「[TRAE_ACCOUNTS 怎么填](#-trae_accounts-怎么填新手必看)」）。
-
-也可以沿用旧写法：在客户端依次登录每个账号，各运行一次 `trae_get_token.py`，
-把得到的值分别填到 `TRAE_REFRESH_TOKEN`、`TRAE_REFRESH_TOKEN_2`、`TRAE_REFRESH_TOKEN_3` …
-
-### 🔐 设备密钥（新版续期必需，必读）
-
-Trae 在 2026-09 之后给 `ExchangeToken` 接口加了**设备签名**校验，
-不带设备证明会直接返回 `20405 Device proof required`，也就是最常见的「凭证续期失败」。
-
-一条命令导出全部需要的值：
-
-```bash
-python trae_get_token.py --export-keys
-```
-
-输出 4 个变量，复制到青龙环境变量：
-
-| 变量名 | 说明 |
-| :--- | :--- |
-| `TRAE_DEVICE_KEY_PEM` | 设备 ECDSA 私钥（PEM，换行已写成 `\n`，整行复制即可） |
-| `TRAE_DEVICE_PUB_PEM` | 设备 ECDSA 公钥（同上） |
-| `TRAE_DEVICE_ID` | 登录 / 续期设备证明用的设备号；签到会另用每轮临时 16 位号 |
-| `TRAE_MACHINE_ID` | 设备 machineId（建议一起填） |
-
-> 💡 同机多账号共用同一套设备密钥（和桌面端行为一致），不用每个账号一份。
-> 脚本用的是**纯标准库 ECDSA P-256**，不需要装 cryptography。
->
-> ⚙️ 请求里的 `ClientID`（`ono9krqynydwx5`）和 `PlatformCode`（`IDE_PC`）已按**桌面端实测值**内置，
-> 并对旧 ClientID 做了自动回退，所以导出的 token 无论新旧都能续期，不需要你手动配。
-
-### 🔍 方式二：手动定位（了解原理可选）
-
-Trae 客户端把登录凭据加密后存在（Windows）：
-
-```text
-%APPDATA%/Trae CN/User/globalStorage/storage.json
-```
-
-其中键名 `iCubeAuthInfo://icube.cloudide` 的值就是加密凭据。
-解密算法（AES-128-CBC + SHA-512 校验）已内置在 `trae_get_token.py` 里，
-所以**直接跑脚本即可**，不用自己动手解密。
-
-### 🌐 方式三：网页登录（OAuth · 真浏览器流程）
-
-不想装客户端 / 想给账号换新凭据？用 `trae_sms_login.py` 走 Trae 官网**真实网页登录**：
-脚本生成带 PKCE 的授权 URL 并打开浏览器，你正常登录（验证码 / 滑块都在官网页面完成），
-登录完成后脚本在本机接过回调，用 AuthCode 自动换取新凭据。
-
-```bash
-python trae_sms_login.py            # 打开浏览器 → 完成登录 → 终端打印新 token
-python trae_sms_login.py --solo     # SOLO 产品线（默认 Trae/IDE 线）
-python trae_sms_login.py --no-open  # 只打印授权 URL，自己手动打开
-python trae_sms_login.py --selftest # 离线自检（不联网、不占用端口）
-```
-
-运行后会打印 `refreshToken` / `accessToken`（并保存到 `trae_sms_accounts.json`）。
-
-> ⚠️ 需要本机装过一次 Trae 客户端：脚本从它的 `storage.json` 取**设备身份**
-> （device_id / 公钥 / machineId），与授权 URL 同源；回调端口固定 `17388`，
-> 被占提示时先退出 Trae 客户端再跑。
->
-> ✅ 好处：不再直连短信接口 —— 机房 / 代理 IP 也不触发风控滑块，
-> 验证码和滑块都由你在浏览器里正常完成，换取的是可直接续期的 refreshToken。
-
-### ⚠️ 注意事项
-
-- 提取前请确保 **Trae 客户端已登录**，否则读不到凭据。
-- 一个账号只在一处刷新（要么青龙，要么其它工具），**别同时挂两处**，否则 token 会互相顶失效。
-
----
-
-## 🚀 快速开始
-
-### 方式一：青龙面板（推荐）
-
-**① 一键订阅拉取（推荐，自动跟随更新）**
-
-在青龙「定时任务」里新建一条任务，命令填：
-
-```bash
-ql repo "https://github.com/L0NE-6/Trae-AutoCheckin.git" "trae_checkin.py|trae_credit_monitor.py" "" "" "main"
-```
-
-手动执行一次，脚本就会拉到 `/ql/repo/Trae-AutoCheckin/` 下，之后每次执行都会自动更新到最新版。
-
-**② 手动放置（不想用订阅时）**
-
-```bash
-# 把两个脚本放入青龙 scripts 目录
-/ql/data/scripts/trae_checkin.py
-/ql/data/scripts/trae_credit_monitor.py
-```
-
-**③ 添加环境变量**
-
-在「环境变量」里添加 `TRAE_ACCOUNTS` 和 `QYWX_TOKEN`。
-
-**④ 新建签到任务**
-
-```bash
-# 订阅方式（路径在 repo 下）
-python /ql/repo/Trae-AutoCheckin/trae_checkin.py          # 早窗: 23 0 * * *  补签: 7,37 * * * *
-python /ql/repo/Trae-AutoCheckin/trae_credit_monitor.py   # 定时: 0 * * * *
-
-# 手动放置方式（路径在 scripts 下）
-python /ql/data/scripts/trae_checkin.py
-python /ql/data/scripts/trae_credit_monitor.py
-```
-
-### 方式二：本地运行
-
-```bash
-export TRAE_ACCOUNTS='[{"accessToken":"...","refreshToken":"...","uid":"账号1"},...]'
-export QYWX_TOKEN="你的企业微信机器人 key"  # 可选
-
-python trae_checkin.py          # 签到
-python trae_credit_monitor.py   # 查积分
-```
-
-### 方式三：GitHub Actions（可选）
-
-仓库已内置 `.github/workflows/daily.yml`。Actions 每次运行都是全新环境，而 Trae 的 refreshToken 会轮换，所以工作流会用 Actions Cache 保存运行状态，并用 `TRAE_CACHE_KEY` 加密后再写入缓存。
-
-1. Fork 本仓库到自己的账号，进入 Actions 页面启用 workflows；
-2. 在 Settings → Secrets and variables → Actions 添加：
-   - `TRAE_ACCOUNTS`（推荐）或旧版 `TRAE_REFRESH_TOKEN`；
-   - `TRAE_DEVICE_KEY_PEM` / `TRAE_DEVICE_PUB_PEM` / `TRAE_MACHINE_ID` / `TRAE_DEVICE_ID`（新版续期必需）；
-   - `TRAE_CACHE_KEY`（必填）：自己生成一个足够长的随机字符串，用于加密轮换 token 缓存；
-   - `QYWX_TOKEN` / `PLUSPLUS_TOKEN` / `TG_BOT_TOKEN` + `TG_CHAT_ID`（可选）。
-3. 打开 `.github/workflows/daily.yml`，取消 `schedule` 两行注释（默认北京时间 00:23 运行）；
-4. 先手动执行一次 workflow，确认签到成功；之后每天自动运行。
-
-> 🔐 Cache 里只有用 `TRAE_CACHE_KEY` 加密后的状态文件，不要把 `.trae_token_cache.json` 等运行数据提交到仓库。同一个账号不要同时跑青龙和 Actions，否则两边的 refreshToken 会互相失效。
-
----
-
-## ⚙️ 环境变量
-
-| 变量 | 必填 | 说明 |
-| :--- | :---: | :--- |
-| `TRAE_ACCOUNTS` | ✅ | 多账号 JSON 数组（推荐）：每号可给 `accessToken` / `refreshToken` / `icubeAuth` / `storagePath` |
-| `TRAE_REFRESH_TOKEN[_N]` | ➖ | 旧部署兼容：refreshToken（无 TRAE_ACCOUNTS 时生效） |
-| `TRAE_ACCESS_TOKEN[_N]` | ➖ | 已有 accessToken 时直接给，省一次续期 |
-| `TRAE_ICUBE_AUTH` | ➖ | 桌面端加密凭据串，脚本自动解密（需 cryptography） |
-| `TRAE_STORAGE_PATH` | ➖ | 直接指向客户端 `storage.json`，自动解密取 token |
-| `TRAE_UID[_N]` | ➖ | 账号标识，仅用于日志与缓存键 |
-| `TRAE_DEVICE_ID[_N]` | ➖ | 登录 / 续期设备号；签到不复用此值 |
-| `TRAE_TOKEN_CACHE` | ➖ | token 缓存路径，默认 `/ql/data/config/` 或脚本同目录 |
-| `TRAE_ACCOUNT_DIR` | ➖ | 账号 JSON（`trae-<uid>.json`）所在目录：读取与回写都用它 |
-| `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
-| `TRAE_BATCH` | ➖ | 每轮签几个账号，默认 **all**（一轮全签）；设 `1` 按小时轮换 |
-| `TRAE_JITTER` | ➖ | 启动随机抖 0~20s 避开整点同秒，默认开；设 `0` 关闭 |
-| `TRAE_COOLDOWN_MIN` | ➖ | 平时 9074 冷却分钟数，默认 **55**，冷却内零请求 |
-| `TRAE_PEAK_HOURS` | ➖ | 早窗小时，默认 **0**；支持 `0` / `0,23` / `0-1`，早窗自动一轮全签 |
-| `TRAE_PEAK_COOLDOWN_MIN` | ➖ | 早窗内冷却分钟数，默认 **12**（好让下轮还在窗口里补签） |
-| `TRAE_CIRCUIT` | ➖ | 设 `1` 恢复旧熔断：一个账号 9074 就全体收工（默认关） |
-| `TRAE_VERIFY_CLAIM` | ➖ | 领取后同设备号回查确认，默认开；设 `0` 关闭 |
-| `TRAE_DEVICE_BRAND` | ➖ | 设备品牌请求头（可选，默认不发，与桌面端 `device_model` 对应） |
-| `TRAE_DEVICE_KEY_PEM` | ✅ | **新版续期必需**：设备 ECDSA 私钥（`trae_get_token.py --export-keys` 导出） |
-| `TRAE_DEVICE_PUB_PEM` | ✅ | **新版续期必需**：设备 ECDSA 公钥（同上） |
-| `TRAE_MACHINE_ID` | ➖ | 设备 machineId（同一命令导出，建议一起填） |
-| `TRAE_CLIENT_ID` | ➖ | 客户端 ClientID，默认已内置桌面端实测值 `ono9krqynydwx5`；换 Trae 版本后才需要改 |
-| `TRAE_DEVICE_NAME` | ➖ | 设备名（默认取主机名） |
-| `TRAE_DEVICE_MODEL` | ➖ | 设备型号（可选，默认不发） |
-| `TRAE_CACHE_KEY` | ➖ | GitHub Actions 专用：加密轮换 token 缓存的随机密钥；启用 Actions 时必填 |
-| `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
-| `PLUSPLUS_TOKEN` / `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` | ➖ | PushPlus token（任选其一，优先识别 `PLUSPLUS_TOKEN`） |
-| `TG_BOT_TOKEN` | ➖ | Telegram Bot token（由 `@BotFather` 获取） |
-| `TG_CHAT_ID` | ➖ | Telegram 接收消息的 chat id；与 `TG_BOT_TOKEN` 同时填写才推送 |
-
-> 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
-
-> 🔐 **两个 token 不要混用**：`TRAE_ACCESS_TOKEN`（`eyJ...` 长 JWT）与 `TRAE_REFRESH_TOKEN`（`xxx=.18dxxx`）是不同凭证。
-> 单账号推荐只填 `TRAE_REFRESH_TOKEN`；两个填成一样、或者填反，脚本会在启动时明确报错。
-
----
-
-## 📋 TRAE_ACCOUNTS 怎么填（新手必看）
-
-一个 **JSON 数组**，一个元素 = 一个账号。**最省事的是让脚本自动生成**：
-
-```bash
-# 自动扫描「本机 Trae 登录态 + 账号目录里的 trae-<uid>.json」，直接打印可用的一行 JSON
-python trae_get_token.py --accounts
-
-# 账号文件（trae-<uid>.json）在别的目录时，指定一下
-TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
-```
-
-把打印出来的那一行**整行**复制进 `TRAE_ACCOUNTS` 就行，不用手动拼。
-
-### 字段说明
-
-| 字段 | 必填 | 说明 |
-| :--- | :---: | :--- |
-| `refreshToken` | ✅ | 账号的 refreshToken。**只给这一个也能跑**，脚本会自动换取 accessToken |
-| `accessToken` | ➖ | 有就直接用，省一次续期；没有脚本自动换 |
-| `uid` | ➖ | 账号标识，用于日志和缓存键；不填会用 `name` 或序号 |
-| `name` | ➖ | 备注名，只影响日志显示 |
-| `deviceId` | ➖ | 登录 / 续期设备号；签到每轮自动生成独立临时号 |
-| `icubeAuth` | ➖ | 桌面端加密凭据串（自动解密，需 cryptography），可替代 refreshToken |
-| `storagePath` | ➖ | 直接给 `storage.json` 路径，脚本自己解密取 token |
-
-### 最小可用示例
-
-只有一个 refreshToken 也能直接跑（推荐先这样跑通）：
-
-```json
-[{"refreshToken":"第1个账号的refreshToken"},{"refreshToken":"第2个账号的refreshToken"}]
-```
-
-### 完整示例
-
-```json
-[{"accessToken":"eyJhbGciOi...","refreshToken":"AbCd...=.0123456789abcdef","uid":"账号1","name":"主号"},{"refreshToken":"XyZ...=.fedcba9876543210","uid":"账号2","name":"小号"}]
-```
-
-### ⚠️ 三个最容易踩的坑
-
-- 必须是**一行**，中间不能有换行（换行会让 JSON 解析失败）
-- 只能用**英文双引号** `"`，中文引号 `“”` 会报错
-- 最后一个 `}` 后面**不能有逗号**
-
-> 💡 填完在青龙里点一次「执行」，日志会打印每个账号的状态；有账号报错会单独提示，不影响其它账号。
-> 旧写法 `TRAE_REFRESH_TOKEN[_N]` 仍然兼容，两种任选其一，`TRAE_ACCOUNTS` 优先。
-
----
-
-## 🎛️ 运行模式
-
-| 模式 | 配置 | 行为 |
-| :--- | :--- | :--- |
-| **全量签到**（默认） | 不设 `TRAE_ONLY` | 一轮把所有未签账号全签掉，每账号使用独立临时签到设备号 |
-| **指定账号** | `TRAE_ONLY=3` | 只跑第 3 个账号，其余跳过 |
-| **按 uid 筛选** | `TRAE_ONLY=113185...` | 只跑匹配 uid 的账号 |
-
-> 💡 配合青龙定时 `*/30 * * * *`，加上当日状态文件自动跳过已签账号，
-> 9074 的账号会冷却，下一轮使用新的临时设备号自动补签。
-
----
-
-## 🧠 工作原理
+### 🧠 工作原理
 
 ```text
         ┌──────────────────────────────────────────────────┐
@@ -403,7 +133,247 @@ TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
 
 ---
 
-## ❓ 常见问题
+---
+
+<a id="credentials"></a>
+## 🔑 凭据与账号
+
+| 变量 | 必需 | 说明 |
+| :--- | :---: | :--- |
+| `TRAE_ACCOUNTS` | 推荐 | JSON 数组，含 token、设备与账号字段 |
+| `TRAE_REFRESH_TOKEN` | 兼容 | 单账号 refresh token |
+| `TRAE_DEVICE_KEY_PEM` | 新版续期 | ECDSA 私钥 |
+| `TRAE_DEVICE_PUB_PEM` | 新版续期 | ECDSA 公钥 |
+| `TRAE_MACHINE_ID` | 新版续期 | 设备 machineId |
+| `TRAE_CACHE_KEY` | Actions | 加密持久化轮换后的 token |
+
+refresh token 是轮换链，同一账号不要在多个部署同时运行。
+
+### 🔑 获取 refreshToken（新手必看）
+
+> 这是**唯一**需要你手动准备的东西，弄到它就大功告成。
+
+#### ✅ 方式一：一键提取（推荐 · 免抓包）
+
+本仓库自带 `trae_get_token.py`，会自动从 Trae 客户端读取并解密登录凭据，**零依赖、不联网、不上传**。
+
+```bash
+# 1. 先在电脑上打开 Trae 客户端并登录你的账号
+# 2. 运行提取脚本
+python trae_get_token.py
+
+# 3. 终端会打印出（直接复制等号后面的那串）：
+#    TRAE_REFRESH_TOKEN = AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCD=.0000000000000000
+```
+
+复制到青龙面板 **环境变量** → 新建变量：
+
+| 变量名 | 值 |
+| :--- | :--- |
+| `TRAE_REFRESH_TOKEN` | 粘贴上面复制的那串 |
+
+> ⚠️ **单账号只填 `TRAE_REFRESH_TOKEN` 就够了**（脚本会自动换取 accessToken）。
+> `TRAE_ACCESS_TOKEN` 和 `TRAE_REFRESH_TOKEN` 是**两串不同的值**：accessToken 是 `eyJ` 开头的长 JWT，refreshToken 形如 `xxx=.18dxxx`。
+> 两个填成同一个值会直接报「鉴权失败（硬失败）」——新版脚本会提前拦截并提示，不会白跑一轮。
+
+**多账号**：直接运行下面这条，会自动把本机登录态和账号目录里的凭据合成一个 `TRAE_ACCOUNTS` 数组：
+
+```bash
+python trae_get_token.py --accounts
+```
+
+输出一行 JSON，整行复制到 `TRAE_ACCOUNTS` 环境变量即可（字段说明见下方「[TRAE_ACCOUNTS 怎么填](#-trae_accounts-怎么填新手必看)」）。
+
+也可以沿用旧写法：在客户端依次登录每个账号，各运行一次 `trae_get_token.py`，
+把得到的值分别填到 `TRAE_REFRESH_TOKEN`、`TRAE_REFRESH_TOKEN_2`、`TRAE_REFRESH_TOKEN_3` …
+
+#### 🔐 设备密钥（新版续期必需，必读）
+
+Trae 在 2026-09 之后给 `ExchangeToken` 接口加了**设备签名**校验，
+不带设备证明会直接返回 `20405 Device proof required`，也就是最常见的「凭证续期失败」。
+
+一条命令导出全部需要的值：
+
+```bash
+python trae_get_token.py --export-keys
+```
+
+输出 4 个变量，复制到青龙环境变量：
+
+| 变量名 | 说明 |
+| :--- | :--- |
+| `TRAE_DEVICE_KEY_PEM` | 设备 ECDSA 私钥（PEM，换行已写成 `\n`，整行复制即可） |
+| `TRAE_DEVICE_PUB_PEM` | 设备 ECDSA 公钥（同上） |
+| `TRAE_DEVICE_ID` | 登录 / 续期设备证明用的设备号；签到会另用每轮临时 16 位号 |
+| `TRAE_MACHINE_ID` | 设备 machineId（建议一起填） |
+
+> 💡 同机多账号共用同一套设备密钥（和桌面端行为一致），不用每个账号一份。
+> 脚本用的是**纯标准库 ECDSA P-256**，不需要装 cryptography。
+>
+> ⚙️ 请求里的 `ClientID`（`ono9krqynydwx5`）和 `PlatformCode`（`IDE_PC`）已按**桌面端实测值**内置，
+> 并对旧 ClientID 做了自动回退，所以导出的 token 无论新旧都能续期，不需要你手动配。
+
+#### 🔍 方式二：手动定位（了解原理可选）
+
+Trae 客户端把登录凭据加密后存在（Windows）：
+
+```text
+%APPDATA%/Trae CN/User/globalStorage/storage.json
+```
+
+其中键名 `iCubeAuthInfo://icube.cloudide` 的值就是加密凭据。
+解密算法（AES-128-CBC + SHA-512 校验）已内置在 `trae_get_token.py` 里，
+所以**直接跑脚本即可**，不用自己动手解密。
+
+#### 🌐 方式三：网页登录（OAuth · 真浏览器流程）
+
+不想装客户端 / 想给账号换新凭据？用 `trae_sms_login.py` 走 Trae 官网**真实网页登录**：
+脚本生成带 PKCE 的授权 URL 并打开浏览器，你正常登录（验证码 / 滑块都在官网页面完成），
+登录完成后脚本在本机接过回调，用 AuthCode 自动换取新凭据。
+
+```bash
+python trae_sms_login.py            # 打开浏览器 → 完成登录 → 终端打印新 token
+python trae_sms_login.py --solo     # SOLO 产品线（默认 Trae/IDE 线）
+python trae_sms_login.py --no-open  # 只打印授权 URL，自己手动打开
+python trae_sms_login.py --selftest # 离线自检（不联网、不占用端口）
+```
+
+运行后会打印 `refreshToken` / `accessToken`（并保存到 `trae_sms_accounts.json`）。
+
+> ⚠️ 需要本机装过一次 Trae 客户端：脚本从它的 `storage.json` 取**设备身份**
+> （device_id / 公钥 / machineId），与授权 URL 同源；回调端口固定 `17388`，
+> 被占提示时先退出 Trae 客户端再跑。
+>
+> ✅ 好处：不再直连短信接口 —— 机房 / 代理 IP 也不触发风控滑块，
+> 验证码和滑块都由你在浏览器里正常完成，换取的是可直接续期的 refreshToken。
+
+#### ⚠️ 注意事项
+
+- 提取前请确保 **Trae 客户端已登录**，否则读不到凭据。
+- 一个账号只在一处刷新（要么青龙，要么其它工具），**别同时挂两处**，否则 token 会互相顶失效。
+
+---
+### 📋 TRAE_ACCOUNTS 怎么填（新手必看）
+
+一个 **JSON 数组**，一个元素 = 一个账号。**最省事的是让脚本自动生成**：
+
+```bash
+# 自动扫描「本机 Trae 登录态 + 账号目录里的 trae-<uid>.json」，直接打印可用的一行 JSON
+python trae_get_token.py --accounts
+
+# 账号文件（trae-<uid>.json）在别的目录时，指定一下
+TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
+```
+
+把打印出来的那一行**整行**复制进 `TRAE_ACCOUNTS` 就行，不用手动拼。
+
+#### 字段说明
+
+| 字段 | 必填 | 说明 |
+| :--- | :---: | :--- |
+| `refreshToken` | ✅ | 账号的 refreshToken。**只给这一个也能跑**，脚本会自动换取 accessToken |
+| `accessToken` | ➖ | 有就直接用，省一次续期；没有脚本自动换 |
+| `uid` | ➖ | 账号标识，用于日志和缓存键；不填会用 `name` 或序号 |
+| `name` | ➖ | 备注名，只影响日志显示 |
+| `deviceId` | ➖ | 登录 / 续期设备号；签到每轮自动生成独立临时号 |
+| `icubeAuth` | ➖ | 桌面端加密凭据串（自动解密，需 cryptography），可替代 refreshToken |
+| `storagePath` | ➖ | 直接给 `storage.json` 路径，脚本自己解密取 token |
+
+#### 最小可用示例
+
+只有一个 refreshToken 也能直接跑（推荐先这样跑通）：
+
+```json
+[{"refreshToken":"第1个账号的refreshToken"},{"refreshToken":"第2个账号的refreshToken"}]
+```
+
+#### 完整示例
+
+```json
+[{"accessToken":"eyJhbGciOi...","refreshToken":"AbCd...=.0123456789abcdef","uid":"账号1","name":"主号"},{"refreshToken":"XyZ...=.fedcba9876543210","uid":"账号2","name":"小号"}]
+```
+
+#### ⚠️ 三个最容易踩的坑
+
+- 必须是**一行**，中间不能有换行（换行会让 JSON 解析失败）
+- 只能用**英文双引号** `"`，中文引号 `“”` 会报错
+- 最后一个 `}` 后面**不能有逗号**
+
+> 💡 填完在青龙里点一次「执行」，日志会打印每个账号的状态；有账号报错会单独提示，不影响其它账号。
+> 旧写法 `TRAE_REFRESH_TOKEN[_N]` 仍然兼容，两种任选其一，`TRAE_ACCOUNTS` 优先。
+
+---
+
+---
+
+<a id="quickstart"></a>
+## 🚀 快速开始
+
+### 🚀 快速开始
+
+#### 方式一：青龙面板（推荐）
+
+**① 一键订阅拉取（推荐，自动跟随更新）**
+
+在青龙「定时任务」里新建一条任务，命令填：
+
+```bash
+ql repo "https://github.com/L0NE-6/Trae-AutoCheckin.git" "trae_checkin.py|trae_credit_monitor.py" "" "" "main"
+```
+
+手动执行一次，脚本就会拉到 `/ql/repo/Trae-AutoCheckin/` 下，之后每次执行都会自动更新到最新版。
+
+**② 手动放置（不想用订阅时）**
+
+```bash
+# 把两个脚本放入青龙 scripts 目录
+/ql/data/scripts/trae_checkin.py
+/ql/data/scripts/trae_credit_monitor.py
+```
+
+**③ 添加环境变量**
+
+在「环境变量」里添加 `TRAE_ACCOUNTS` 和 `QYWX_TOKEN`。
+
+**④ 新建签到任务**
+
+```bash
+# 订阅方式（路径在 repo 下）
+python /ql/repo/Trae-AutoCheckin/trae_checkin.py          # 早窗: 23 0 * * *  补签: 7,37 * * * *
+python /ql/repo/Trae-AutoCheckin/trae_credit_monitor.py   # 定时: 0 * * * *
+
+# 手动放置方式（路径在 scripts 下）
+python /ql/data/scripts/trae_checkin.py
+python /ql/data/scripts/trae_credit_monitor.py
+```
+
+#### 方式二：本地运行
+
+```bash
+export TRAE_ACCOUNTS='[{"accessToken":"...","refreshToken":"...","uid":"账号1"},...]'
+export QYWX_TOKEN="你的企业微信机器人 key"  # 可选
+
+python trae_checkin.py          # 签到
+python trae_credit_monitor.py   # 查积分
+```
+
+#### 方式三：GitHub Actions（可选）
+
+仓库已内置 `.github/workflows/daily.yml`。Actions 每次运行都是全新环境，而 Trae 的 refreshToken 会轮换，所以工作流会用 Actions Cache 保存运行状态，并用 `TRAE_CACHE_KEY` 加密后再写入缓存。
+
+1. Fork 本仓库到自己的账号，进入 Actions 页面启用 workflows；
+2. 在 Settings → Secrets and variables → Actions 添加：
+   - `TRAE_ACCOUNTS`（推荐）或旧版 `TRAE_REFRESH_TOKEN`；
+   - `TRAE_DEVICE_KEY_PEM` / `TRAE_DEVICE_PUB_PEM` / `TRAE_MACHINE_ID` / `TRAE_DEVICE_ID`（新版续期必需）；
+   - `TRAE_CACHE_KEY`（必填）：自己生成一个足够长的随机字符串，用于加密轮换 token 缓存；
+   - `QYWX_TOKEN` / `PLUSPLUS_TOKEN` / `TG_BOT_TOKEN` + `TG_CHAT_ID`（可选）。
+3. 打开 `.github/workflows/daily.yml`，取消 `schedule` 两行注释（默认北京时间 00:23 运行）；
+4. 先手动执行一次 workflow，确认签到成功；之后每天自动运行。
+
+> 🔐 Cache 里只有用 `TRAE_CACHE_KEY` 加密后的状态文件，不要把 `.trae_token_cache.json` 等运行数据提交到仓库。同一个账号不要同时跑青龙和 Actions，否则两边的 refreshToken 会互相失效。
+
+---
+### ❓ 常见问题
 
 <details>
 <summary><b>怎么获取 refreshToken？</b></summary>
@@ -466,7 +436,150 @@ python trae_get_token.py
 
 ---
 
-## 📂 项目结构
+---
+
+<a id="qinglong"></a>
+## 🐧 青龙面板
+
+---
+
+<a id="actions"></a>
+## ☁️ GitHub Actions
+
+---
+
+<a id="cli"></a>
+## ⌨️ CLI 与环境变量
+
+### ⚙️ 环境变量
+
+| 变量 | 必填 | 说明 |
+| :--- | :---: | :--- |
+| `TRAE_ACCOUNTS` | ✅ | 多账号 JSON 数组（推荐）：每号可给 `accessToken` / `refreshToken` / `icubeAuth` / `storagePath` |
+| `TRAE_REFRESH_TOKEN[_N]` | ➖ | 旧部署兼容：refreshToken（无 TRAE_ACCOUNTS 时生效） |
+| `TRAE_ACCESS_TOKEN[_N]` | ➖ | 已有 accessToken 时直接给，省一次续期 |
+| `TRAE_ICUBE_AUTH` | ➖ | 桌面端加密凭据串，脚本自动解密（需 cryptography） |
+| `TRAE_STORAGE_PATH` | ➖ | 直接指向客户端 `storage.json`，自动解密取 token |
+| `TRAE_UID[_N]` | ➖ | 账号标识，仅用于日志与缓存键 |
+| `TRAE_DEVICE_ID[_N]` | ➖ | 登录 / 续期设备号；签到不复用此值 |
+| `TRAE_TOKEN_CACHE` | ➖ | token 缓存路径，默认 `/ql/data/config/` 或脚本同目录 |
+| `TRAE_ACCOUNT_DIR` | ➖ | 账号 JSON（`trae-<uid>.json`）所在目录：读取与回写都用它 |
+| `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
+| `TRAE_BATCH` | ➖ | 每轮签几个账号，默认 **all**（一轮全签）；设 `1` 按小时轮换 |
+| `TRAE_JITTER` | ➖ | 启动随机抖 0~20s 避开整点同秒，默认开；设 `0` 关闭 |
+| `TRAE_COOLDOWN_MIN` | ➖ | 平时 9074 冷却分钟数，默认 **55**，冷却内零请求 |
+| `TRAE_PEAK_HOURS` | ➖ | 早窗小时，默认 **0**；支持 `0` / `0,23` / `0-1`，早窗自动一轮全签 |
+| `TRAE_PEAK_COOLDOWN_MIN` | ➖ | 早窗内冷却分钟数，默认 **12**（好让下轮还在窗口里补签） |
+| `TRAE_CIRCUIT` | ➖ | 设 `1` 恢复旧熔断：一个账号 9074 就全体收工（默认关） |
+| `TRAE_VERIFY_CLAIM` | ➖ | 领取后同设备号回查确认，默认开；设 `0` 关闭 |
+| `TRAE_DEVICE_BRAND` | ➖ | 设备品牌请求头（可选，默认不发，与桌面端 `device_model` 对应） |
+| `TRAE_DEVICE_KEY_PEM` | ✅ | **新版续期必需**：设备 ECDSA 私钥（`trae_get_token.py --export-keys` 导出） |
+| `TRAE_DEVICE_PUB_PEM` | ✅ | **新版续期必需**：设备 ECDSA 公钥（同上） |
+| `TRAE_MACHINE_ID` | ➖ | 设备 machineId（同一命令导出，建议一起填） |
+| `TRAE_CLIENT_ID` | ➖ | 客户端 ClientID，默认已内置桌面端实测值 `ono9krqynydwx5`；换 Trae 版本后才需要改 |
+| `TRAE_DEVICE_NAME` | ➖ | 设备名（默认取主机名） |
+| `TRAE_DEVICE_MODEL` | ➖ | 设备型号（可选，默认不发） |
+| `TRAE_CACHE_KEY` | ➖ | GitHub Actions 专用：加密轮换 token 缓存的随机密钥；启用 Actions 时必填 |
+| `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
+| `PLUSPLUS_TOKEN` / `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` | ➖ | PushPlus token（任选其一，优先识别 `PLUSPLUS_TOKEN`） |
+| `TG_BOT_TOKEN` | ➖ | Telegram Bot token（由 `@BotFather` 获取） |
+| `TG_CHAT_ID` | ➖ | Telegram 接收消息的 chat id；与 `TG_BOT_TOKEN` 同时填写才推送 |
+
+> 💡 兼容旧命名：`WECHAT_WEBHOOK` 与 `QYWX_TOKEN` 都能识别。
+
+> 🔐 **两个 token 不要混用**：`TRAE_ACCESS_TOKEN`（`eyJ...` 长 JWT）与 `TRAE_REFRESH_TOKEN`（`xxx=.18dxxx`）是不同凭证。
+> 单账号推荐只填 `TRAE_REFRESH_TOKEN`；两个填成一样、或者填反，脚本会在启动时明确报错。
+
+---
+### 🎛️ 运行模式
+
+| 模式 | 配置 | 行为 |
+| :--- | :--- | :--- |
+| **全量签到**（默认） | 不设 `TRAE_ONLY` | 一轮把所有未签账号全签掉，每账号使用独立临时签到设备号 |
+| **指定账号** | `TRAE_ONLY=3` | 只跑第 3 个账号，其余跳过 |
+| **按 uid 筛选** | `TRAE_ONLY=113185...` | 只跑匹配 uid 的账号 |
+
+> 💡 配合青龙定时 `*/30 * * * *`，加上当日状态文件自动跳过已签账号，
+> 9074 的账号会冷却，下一轮使用新的临时设备号自动补签。
+
+---
+
+---
+
+<a id="result-codes"></a>
+## 🚦 结果码
+
+| 状态 | 含义 |
+| :--- | :--- |
+| 签到成功且余额可读 | 成功 |
+| 当日已签 | 中性成功，不再请求 |
+| `9074` / `429` | 当前账号冷却 |
+| 5xx | 当前轮失败，交给后续补签 |
+| refresh token 续期失败 | 硬失败，需要重新登录 |
+
+---
+
+<a id="success"></a>
+## ✅ 成功判据
+
+签到 claim 完成，并用 entitlement 接口读到真实积分余额，才形成可交付成功结果。
+
+---
+
+<a id="tests"></a>
+## 🧪 测试
+
+```powershell
+$env:PYTHONUTF8 = "1"
+python -m unittest discover -s tests -v
+python -m py_compile trae_checkin.py trae_credit_monitor.py trae_get_token.py trae_sms_login.py
+```
+
+测试覆盖 9074 冷却、Token 轮换、配置生成器与签到回归。
+
+---
+
+<a id="design"></a>
+## 🧱 设计原则
+
+- 零依赖主脚本，配置生成器用于本地凭据整理。
+- 每账号独立临时签到设备号，登录与续期继续使用真实设备证明。
+- 9074 按账号冷却，不连坐其他账号。
+- 当日成功写入状态文件，后续运行零请求。
+
+### ✨ 特性
+
+- 🪶 **零依赖** — 只用 Python 标准库，开箱即用
+- 🛡️ **9074 冷却** — 本轮命中后按账号冷却，不反复轰接口
+- 🚀 **一轮全签** — 默认每轮把所有未签账号全签掉，每账号使用独立临时设备号
+- 🔐 **Token 缓存** — 复用未过期的 `accessToken`，失效才续期，减少请求
+- ⛓️ **链式续期** — 自动处理 `refreshToken` 轮换并回写，长期不失效
+- 🔁 **产品线回退** — 续期自动在 IDE（Trae CN）/ SOLO（TRAE SOLO CN）两套钥匙间回退，两类客户端提取的 token 都能续
+- 👥 **多账号** — 支持任意数量账号，环境变量即可配置
+- 📅 **当日跳过** — 已签成功的账号后续运行零请求，不重复消耗
+- ✅ **9004 / 9095 同日已签** — 两个业务码都按「今日已签到」处理，不再误报失败
+- 🧮 **签到积分不叠加** — 展示值优先取正的 `credits`；否则取正的 `extra_credits`，两者绝不相加
+- 📱 **设备分离** — 登录 / 续期使用真实设备证明，签到每轮新建 16 位数字设备号
+- 📦 **积分包到期** — 积分监控可读取积分包额度/用量，跳过耗尽包并提示最早到期包
+- 📤 **多渠道推送** — 签到 / 积分结果推送到企业微信、PushPlus 或 Telegram
+- 🌐 **网页登录** — 真浏览器走官网 OAuth 拿 Token，验证码/滑块都在浏览器里完成
+- 🎨 **美观日志** — 带图标与分区的执行日志，状态一目了然
+
+---
+
+---
+
+<a id="privacy"></a>
+## 🔒 隐私与安全
+
+凭据、状态文件、日志与运行缓存都属于账号级数据。仓库和 Issue 中只保留脱敏片段。
+
+---
+
+<a id="layout"></a>
+## 📁 目录结构
+
+### 📂 项目结构
 
 ```text
 Trae-AutoCheckin/
@@ -483,52 +596,53 @@ Trae-AutoCheckin/
 
 ---
 
-## ☕ 投喂支持
+---
 
-如果这个项目帮到了你，可以请作者喝杯咖啡，感谢支持！
+<a id="release"></a>
+## 📦 版本与发布
+
+当前标签为 `v1.2.4`。发布时同步主脚本、积分监控、登录工具、配置生成器、测试与 README。
+
+---
+
+<a id="disclaimer"></a>
+## ⚠️ 免责声明
+
+仓库内容用于账号持有人维护自身权益。使用前应确认账号、服务条款与所在地规则；作者不对账号限制、接口变化、网络失败或第三方部署造成的损失作出保证。
+
+完整展示与转载规则见 [NOTICE.md](NOTICE.md)。
+
+---
+
+<a id="donate"></a>
+## ☕ 赞赏码
+
+### 支持与投喂
+
+如果这个项目节省了你的时间，可以扫码支持维护。赞赏完全自愿，不影响代码、文档与 Issue 处理。
 
 <div align="center">
 <table>
 <tr>
-<th align="center">支付宝</th>
-<th align="center">微信支付</th>
-</tr>
-<tr>
-<td align="center"><img src="assets/donate/alipay.jpg" width="320" alt="支付宝收款码"></td>
-<td align="center"><img src="assets/donate/wechat.jpg" width="320" alt="微信收款码"></td>
+<td align="center"><strong>微信赞赏码</strong><br /><img src="assets/donate/donate-wechat.png" width="260" alt="微信赞赏码" /></td>
+<td align="center"><strong>支付宝赞赏码</strong><br /><img src="assets/donate/donate-alipay.jpg" width="260" alt="支付宝赞赏码" /></td>
 </tr>
 </table>
 </div>
 
-> ⚠️ 收款码仅用于向作者自愿赞赏。任何第三方以代下载、代部署、内部资源或会员群为由收费，均与作者无关，请停止付款并保留证据。
-
 ---
 
-## ⚠️ 免责声明
+<a id="feedback"></a>
+## 💬 反馈与 Star History
 
-本项目仅供**个人学习与研究**使用，请遵守 Trae 的服务条款。
-使用本工具产生的一切后果由使用者自行承担，作者不对任何账号风险负责。
+### 反馈与贡献
 
----
+- [提交 Issue](https://github.com/L0NE-6/Trae-AutoCheckin/issues)
+- [提交 Pull Request](https://github.com/L0NE-6/Trae-AutoCheckin/pulls)
+- [查看更新日志](CHANGELOG.md)
 
-## ✦ 星轨 Star Trail
-
-> 签到是每天的一小步，Star 是社区留下的一次确认。感谢每一个让这条自动化轨迹继续向前的人。
+反馈请附脱敏日志、复现步骤、运行环境与实际结果。不要贴 Token、Cookie、JWT、手机号或运行状态文件。
 
 <a href="https://star-history.com/#L0NE-6/Trae-AutoCheckin&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date" />
-    <img alt="Trae AutoCheckin Star Trail" src="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date" />
-  </picture>
+  <img src="https://api.star-history.com/svg?repos=L0NE-6/Trae-AutoCheckin&type=Date" alt="Trae-AutoCheckin Star History" />
 </a>
-
----
-
-<div align="center">
-
-**L0NE-6 · DAILY SIGNAL**
-
-[Releases](https://github.com/L0NE-6/Trae-AutoCheckin/releases) · [Issues](https://github.com/L0NE-6/Trae-AutoCheckin/issues) · [Pull Requests](https://github.com/L0NE-6/Trae-AutoCheckin/pulls) · [Star](https://github.com/L0NE-6/Trae-AutoCheckin)
-
-</div>
