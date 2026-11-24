@@ -135,9 +135,7 @@ def _apply_trae_config():
                          ('peakHours', 'TRAE_PEAK_HOURS'),
                          ('cooldownMin', 'TRAE_COOLDOWN_MIN'),
                          ('peakCooldownMin', 'TRAE_PEAK_COOLDOWN_MIN'),
-                         ('claimTries', 'CLAIM_TRIES'),
                          ('jitter', 'TRAE_JITTER'),
-                         ('rotate', 'TRAE_ROTATE'),
                          ('verifyClaim', 'TRAE_VERIFY_CLAIM'),
                          ('circuit', 'TRAE_CIRCUIT')):
             put(env, sch.get(key))

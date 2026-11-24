@@ -1,6 +1,6 @@
 # Trae AutoCheckin
 
-**Check-in diário do Trae, repetição por dispositivo, monitoramento de créditos e múltiplas contas sem dependências externas.**
+**Check-in diário do Trae com ID temporário por execução, monitoramento de créditos e múltiplas contas sem dependências externas.**
 
 [简体中文](../README.md) | [English](README.en.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Português (BR)](README.pt-BR.md)
 
@@ -18,10 +18,12 @@
 
 ## Scripts
 
-- `trae_checkin.py`: check-in, renovação de tokens e troca controlada de dispositivo.
+- `trae_checkin.py`: check-in, renovação de tokens e um novo ID de dispositivo de 16 dígitos por execução.
 - `trae_credit_monitor.py`: consulta somente leitura de saldo e uso.
 - `trae_get_token.py`: extrai credenciais e dados do dispositivo do cliente.
 - `trae_sms_login.py`: login OAuth pelo navegador.
+
+Login e renovação de token continuam usando a prova real do dispositivo vinculada à conta. O ID temporário é reutilizado apenas no status, claim e verificação da mesma execução.
 
 ## Início rápido
 

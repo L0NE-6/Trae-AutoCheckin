@@ -1,6 +1,6 @@
 # Trae AutoCheckin
 
-**Daily Trae check-in, device-aware retry, credit monitoring, and multi-account reporting with zero Python dependencies.**
+**Daily Trae check-in with per-run device IDs, credit monitoring, and multi-account reporting with zero Python dependencies.**
 
 [简体中文](../README.md) | [English](README.en.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Português (BR)](README.pt-BR.md)
 
@@ -18,10 +18,12 @@
 
 ## Included scripts
 
-- `trae_checkin.py`: check-in workflow with token refresh and device rotation.
+- `trae_checkin.py`: check-in workflow with token refresh and a fresh 16-digit check-in device ID per run.
 - `trae_credit_monitor.py`: read-only credit balance and usage report.
 - `trae_get_token.py`: extract client credentials and export device information.
 - `trae_sms_login.py`: browser-based OAuth login flow.
+
+Login and token refresh keep the account-bound device proof. The temporary check-in device ID is reused only for that run's status, claim, and verification calls.
 
 ## Quick start
 

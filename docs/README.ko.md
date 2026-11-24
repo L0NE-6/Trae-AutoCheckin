@@ -1,6 +1,6 @@
 # Trae AutoCheckin
 
-**외부 패키지 없이 동작하는 Trae 일일 체크인, 기기 재시도, 크레딧 모니터링 도구입니다.**
+**외부 패키지 없이 동작하는 Trae 일일 체크인, 실행별 임시 기기 ID, 크레딧 모니터링 도구입니다.**
 
 [简体中文](../README.md) | [English](README.en.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Português (BR)](README.pt-BR.md)
 
@@ -18,10 +18,12 @@
 
 ## 포함 스크립트
 
-- `trae_checkin.py`: 체크인, Token 갱신, 기기 ID 전환.
+- `trae_checkin.py`: 체크인, Token 갱신, 실행마다 새로운 16자리 임시 기기 ID.
 - `trae_credit_monitor.py`: 읽기 전용 크레딧 잔액 및 사용량 조회.
 - `trae_get_token.py`: 클라이언트에서 자격 증명과 기기 정보 추출.
 - `trae_sms_login.py`: 브라우저 OAuth 로그인.
+
+로그인과 Token 갱신은 계정에 묶인 실제 기기 증명을 사용하며, 임시 기기 ID는 해당 실행의 상태 확인, 수령, 재확인에만 재사용합니다.
 
 ## 빠른 시작
 

@@ -6,7 +6,7 @@
 
 **Trae 每日自动签到 & 积分监控 · 零依赖 · 多账号 · 企业微信 / PushPlus / Telegram 推送**
 
-> 当前版本：**v1.2.0**（2026-11-19） · 最新更新：新增可选 Telegram Bot 推送，日志不泄露 bot token
+> 当前版本：**v1.2.1**（2026-11-24） · 最新更新：签到改为每轮临时 16 位设备号，登录与续期继续使用真实设备证明
 
 [简体中文](README.md) · [English](docs/README.en.md) · [繁體中文](docs/README.zh-Hant.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Português (BR)](docs/README.pt-BR.md)
 
@@ -44,7 +44,7 @@
 
 | 维度 | 说明 |
 | :--- | :--- |
-| **做什么** | 多账号 Trae 每日签到、9074 设备号处理、Token 续期、积分只读监控，以及企业微信 / PushPlus / Telegram 推送。 |
+| **做什么** | 多账号 Trae 每日签到、每轮临时设备号、9074 冷却、Token 续期、积分只读监控，以及企业微信 / PushPlus / Telegram 推送。 |
 | **输入** | 推荐 `TRAE_ACCOUNTS`；新版续期还需要设备 ECDSA 密钥与设备号。 |
 | **输出** | 分账号签到结果、积分余额/用量、Token 轮换缓存和可选多渠道推送。 |
 | **部署** | 青龙面板、本地定时任务、GitHub Actions。 |
@@ -57,7 +57,7 @@
 
 | 脚本 | 作用 |
 | :--- | :--- |
-| `trae_checkin.py` | 🎯 多账号每日签到，9074 自动换号，自动续期 + 推送 |
+| `trae_checkin.py` | 🎯 多账号每日签到，每轮临时设备号，自动续期 + 推送 |
 | `trae_credit_monitor.py` | 📊 只读查询积分「已用 / 剩余」，绝不签到 |
 | `trae_sms_login.py` | 🌐 网页 OAuth 登录换 Token（真浏览器走官网，验证码/滑块无忧） |
 | `trae_get_token.py` | 🔑 从 Trae 客户端一键提取 refreshToken / 生成 TRAE_ACCOUNTS（免抓包） |
@@ -69,8 +69,8 @@
 ## ✨ 特性
 
 - 🪶 **零依赖** — 只用 Python 标准库，开箱即用
-- 🛡️ **解 9074** — 命中后自动换新设备号重签（实测立刻成功），与桌面端请求完全对齐
-- 🚀 **一轮全签** — 默认每轮把所有未签账号全签掉，9074 自动换号兜底
+- 🛡️ **9074 冷却** — 本轮命中后按账号冷却，不反复轰接口
+- 🚀 **一轮全签** — 默认每轮把所有未签账号全签掉，每账号使用独立临时设备号
 - 🔐 **Token 缓存** — 复用未过期的 `accessToken`，失效才续期，减少请求
 - ⛓️ **链式续期** — 自动处理 `refreshToken` 轮换并回写，长期不失效
 - 🔁 **产品线回退** — 续期自动在 IDE（Trae CN）/ SOLO（TRAE SOLO CN）两套钥匙间回退，两类客户端提取的 token 都能续
@@ -78,7 +78,7 @@
 - 📅 **当日跳过** — 已签成功的账号后续运行零请求，不重复消耗
 - ✅ **9004 / 9095 同日已签** — 两个业务码都按「今日已签到」处理，不再误报失败
 - 🧮 **签到积分不叠加** — 展示值优先取正的 `credits`；否则取正的 `extra_credits`，两者绝不相加
-- 📱 **稳定设备号** — 优先用客户端真实设备号，拿不到才按账号生成固定 16 位
+- 📱 **设备分离** — 登录 / 续期使用真实设备证明，签到每轮新建 16 位数字设备号
 - 📦 **积分包到期** — 积分监控可读取积分包额度/用量，跳过耗尽包并提示最早到期包
 - 📤 **多渠道推送** — 签到 / 积分结果推送到企业微信、PushPlus 或 Telegram
 - 🌐 **网页登录** — 真浏览器走官网 OAuth 拿 Token，验证码/滑块都在浏览器里完成
@@ -141,7 +141,7 @@ python trae_get_token.py --export-keys
 | :--- | :--- |
 | `TRAE_DEVICE_KEY_PEM` | 设备 ECDSA 私钥（PEM，换行已写成 `\n`，整行复制即可） |
 | `TRAE_DEVICE_PUB_PEM` | 设备 ECDSA 公钥（同上） |
-| `TRAE_DEVICE_ID` | 设备号（客户端注册的那串十进制数字，位数不固定，15/16 位都见过） |
+| `TRAE_DEVICE_ID` | 登录 / 续期设备证明用的设备号；签到会另用每轮临时 16 位号 |
 | `TRAE_MACHINE_ID` | 设备 machineId（建议一起填） |
 
 > 💡 同机多账号共用同一套设备密钥（和桌面端行为一致），不用每个账号一份。
@@ -266,7 +266,7 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_ICUBE_AUTH` | ➖ | 桌面端加密凭据串，脚本自动解密（需 cryptography） |
 | `TRAE_STORAGE_PATH` | ➖ | 直接指向客户端 `storage.json`，自动解密取 token |
 | `TRAE_UID[_N]` | ➖ | 账号标识，仅用于日志与缓存键 |
-| `TRAE_DEVICE_ID[_N]` | ➖ | 设备号；留空则优先用客户端真实设备号（本机读不到才用配置值） |
+| `TRAE_DEVICE_ID[_N]` | ➖ | 登录 / 续期设备号；签到不复用此值 |
 | `TRAE_TOKEN_CACHE` | ➖ | token 缓存路径，默认 `/ql/data/config/` 或脚本同目录 |
 | `TRAE_ACCOUNT_DIR` | ➖ | 账号 JSON（`trae-<uid>.json`）所在目录：读取与回写都用它 |
 | `TRAE_ONLY` | ➖ | 只跑指定账号：序号(从 1 起) / `uid` / `name` |
@@ -276,7 +276,6 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_PEAK_HOURS` | ➖ | 早窗小时，默认 **0**；支持 `0` / `0,23` / `0-1`，早窗自动一轮全签 |
 | `TRAE_PEAK_COOLDOWN_MIN` | ➖ | 早窗内冷却分钟数，默认 **12**（好让下轮还在窗口里补签） |
 | `TRAE_CIRCUIT` | ➖ | 设 `1` 恢复旧熔断：一个账号 9074 就全体收工（默认关） |
-| `TRAE_ROTATE` | ➖ | 9074 后在真实设备号之间切换（不再生成假号），默认开；设 `0` 关闭 |
 | `TRAE_VERIFY_CLAIM` | ➖ | 领取后同设备号回查确认，默认开；设 `0` 关闭 |
 | `TRAE_DEVICE_BRAND` | ➖ | 设备品牌请求头（可选，默认不发，与桌面端 `device_model` 对应） |
 | `TRAE_DEVICE_KEY_PEM` | ✅ | **新版续期必需**：设备 ECDSA 私钥（`trae_get_token.py --export-keys` 导出） |
@@ -286,7 +285,6 @@ python trae_credit_monitor.py   # 查积分
 | `TRAE_DEVICE_NAME` | ➖ | 设备名（默认取主机名） |
 | `TRAE_DEVICE_MODEL` | ➖ | 设备型号（可选，默认不发） |
 | `TRAE_CACHE_KEY` | ➖ | GitHub Actions 专用：加密轮换 token 缓存的随机密钥；启用 Actions 时必填 |
-| `CLAIM_TRIES` | ➖ | 每账号每轮 claim 次数，默认 **1**（换号才是正解，别调大） |
 | `QYWX_TOKEN` | ➖ | 企业微信机器人 key（`?key=` 后面那段） |
 | `PLUSPLUS_TOKEN` / `PLUSHPLUS_TOKEN` / `PUSHPLUS_TOKEN` | ➖ | PushPlus token（任选其一，优先识别 `PLUSPLUS_TOKEN`） |
 | `TG_BOT_TOKEN` | ➖ | Telegram Bot token（由 `@BotFather` 获取） |
@@ -321,7 +319,7 @@ TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
 | `accessToken` | ➖ | 有就直接用，省一次续期；没有脚本自动换 |
 | `uid` | ➖ | 账号标识，用于日志和缓存键；不填会用 `name` 或序号 |
 | `name` | ➖ | 备注名，只影响日志显示 |
-| `deviceId` | ➖ | 16 位设备号；不填会自动生成并持久化 |
+| `deviceId` | ➖ | 登录 / 续期设备号；签到每轮自动生成独立临时号 |
 | `icubeAuth` | ➖ | 桌面端加密凭据串（自动解密，需 cryptography），可替代 refreshToken |
 | `storagePath` | ➖ | 直接给 `storage.json` 路径，脚本自己解密取 token |
 
@@ -354,13 +352,12 @@ TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
 
 | 模式 | 配置 | 行为 |
 | :--- | :--- | :--- |
-| **全量签到**（默认） | 不设 `TRAE_ONLY` | 一轮把所有未签账号全签掉，9074 自动换号重签 |
+| **全量签到**（默认） | 不设 `TRAE_ONLY` | 一轮把所有未签账号全签掉，每账号使用独立临时签到设备号 |
 | **指定账号** | `TRAE_ONLY=3` | 只跑第 3 个账号，其余跳过 |
 | **按 uid 筛选** | `TRAE_ONLY=113185...` | 只跑匹配 uid 的账号 |
-| **重试多次** | `CLAIM_TRIES=2` | 单账号 9074 后当场再试（一般不需要，换号已内置） |
 
 > 💡 配合青龙定时 `*/30 * * * *`，加上当日状态文件自动跳过已签账号，
-> 9074 的账号会自动换设备号重签，仍不行才冷却等下轮补签。
+> 9074 的账号会冷却，下一轮使用新的临时设备号自动补签。
 
 ---
 
@@ -391,10 +388,10 @@ TRAE_ACCOUNT_DIR="/your/accounts/dir" python trae_get_token.py --accounts
                                    │
                           ┌────────┴────────┐
                           ▼                 ▼
-                      code=0 成功       code=9074 设备号被记住
+                      code=0 成功       code=9074 进入账号冷却
                           │                 │
                           ▼                 ▼
-                      🎉 签到成功       🔄 换新设备号重签 → 仍 9074 才冷却
+                      🎉 签到成功       ⏳ 下轮换新临时设备号补签
 ```
 
 > ✅ claim 返回 `code=9004` 或 `code=9095` 时，都表示本设备今日已签到，直接记为「已签到」，不会计入失败。
@@ -453,17 +450,12 @@ python trae_get_token.py
 <details>
 <summary><b>9074 到底是什么？</b></summary>
 
-9074 的文案「当前参与用户太多」**有误导性** —— 实测它绝大多数就是「**设备号不对**」：x-device-id 必须是这台客户端在服务端注册过的那串十进制数字（15/16 位都有），脚本自己生成的号或随便填的号会被直接拒成 9074。
-
-脚本的做法：优先使用客户端真实设备号；命中 9074 时只在**真实设备号之间**切换，换不了就按账号冷却等下轮 cron，不再生成假号去撞。
+9074 按服务端时间窗口限流处理。当前脚本每轮为签到生成新的 16 位数字设备号，并在同一轮的状态、领取、回查中复用；命中 9074 后按账号冷却，不连续轰炸接口。
 </details>
 
-> 💡 **实测结论（2026-10-09 更正）**：同账号同时刻对照 —— 自动生成的设备号 → `9074`，
-> 客户端真实注册号 → 通过设备检查。9074 基本等于「设备号不对」，跟出口 IP / 请求头无关。
-> 另外请求体必须带 `{"req_source":1}` 和设备头（与桌面端一致），空请求体也会被拒成 9074。
+> 💡 签到请求体固定为 `{}`，状态、领取、回查使用同一个临时 `x-device-id`。下一轮会重新生成，避免长期复用同一设备指纹。
 
-> ⚠️ 一个真实设备号一天只能签一个账号（`9004` / `9095` 都表示本设备今日已签）；N 个账号要签就需要 N 个客户端真号，
-> 在装了客户端的机器上跑 `python trae_get_token.py --accounts` 会逐个账号自动带上真号。
+> ⚠️ 登录和续期仍使用账号绑定的真实设备证明；临时签到设备号不能替代设备私钥、`realDeviceId` 或 `machineId`。
 
 <details>
 <summary><b>为什么有两个脚本？</b></summary>
@@ -478,7 +470,7 @@ python trae_get_token.py
 
 ```text
 Trae-AutoCheckin/
-├── trae_checkin.py             # 🎯 多账号签到（主脚本，9074 自动换号）
+├── trae_checkin.py             # 🎯 多账号签到（主脚本，每轮临时设备号）
 ├── trae_credit_monitor.py      # 📊 积分只读监控
 ├── trae_sms_login.py           # 🌐 网页 OAuth 登录换 Token（真浏览器流程）
 ├── trae_get_token.py           # 🔑 refreshToken 提取 + --accounts 一键生成 TRAE_ACCOUNTS

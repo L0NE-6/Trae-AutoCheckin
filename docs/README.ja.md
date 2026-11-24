@@ -1,6 +1,6 @@
 # Trae AutoCheckin
 
-**依存パッケージ不要の Trae 毎日チェックイン、デバイス再試行、クレジット監視ツール。**
+**依存パッケージ不要の Trae 毎日チェックイン、毎回の一時デバイス ID、クレジット監視ツール。**
 
 [简体中文](../README.md) | [English](README.en.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Português (BR)](README.pt-BR.md)
 
@@ -18,10 +18,12 @@
 
 ## 収録スクリプト
 
-- `trae_checkin.py`: チェックイン、Token 更新、デバイス ID 切り替え。
+- `trae_checkin.py`: チェックイン、Token 更新、実行ごとの新しい 16 桁デバイス ID。
 - `trae_credit_monitor.py`: クレジット残高と使用量の読み取り専用監視。
 - `trae_get_token.py`: クライアントから認証情報とデバイス情報を抽出。
 - `trae_sms_login.py`: ブラウザ OAuth ログイン。
+
+ログインと Token 更新はアカウントに紐づく実際のデバイス証明を使い、一時デバイス ID はその回の状態確認、受取、再確認だけで再利用します。
 
 ## クイックスタート
 

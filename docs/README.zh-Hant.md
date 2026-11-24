@@ -1,6 +1,6 @@
 # Trae AutoCheckin
 
-**零依賴、多帳號的 Trae 每日簽到、裝置號重試與積分監控工具。**
+**零依賴、多帳號的 Trae 每日簽到、每輪臨時裝置號與積分監控工具。**
 
 [简体中文](../README.md) | [English](README.en.md) | [繁體中文](README.zh-Hant.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Português (BR)](README.pt-BR.md)
 
@@ -18,10 +18,12 @@
 
 ## 內含腳本
 
-- `trae_checkin.py`：簽到、Token 續期與裝置號輪換。
+- `trae_checkin.py`：簽到、Token 續期，每輪使用新的 16 位數臨時裝置號。
 - `trae_credit_monitor.py`：唯讀查詢積分餘額與用量。
 - `trae_get_token.py`：從已登入客戶端提取憑證與裝置資訊。
 - `trae_sms_login.py`：使用瀏覽器完成 OAuth 登入。
+
+登入與 Token 續期仍使用帳號綁定的真實裝置證明；臨時裝置號只用於本輪狀態、領取與回查。
 
 ## 快速開始
 

@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 import time
 import unittest
 from contextlib import redirect_stdout
@@ -47,6 +48,20 @@ class TraeAlreadyCheckedInTests(unittest.TestCase):
             )
         self.assertFalse(ok)
         self.assertEqual(9095, code)
+        self.assertIsNone(points)
+        self.assertEqual(1, claim.call_count)
+
+    def test_claim_9074_is_single_attempt_even_with_legacy_env(self):
+        with patch.dict(os.environ, {"CLAIM_TRIES": "5"}), patch.object(
+            CHECKIN, "claim", return_value=(200, 9074, "too many", None)
+        ) as claim:
+            ok, code, msg, points = CHECKIN.claim_with_retry(
+                {"accessToken": "token", "deviceId": "device", "refreshToken": "refresh"},
+                {},
+            )
+        self.assertFalse(ok)
+        self.assertEqual(9074, code)
+        self.assertEqual("too many", msg)
         self.assertIsNone(points)
         self.assertEqual(1, claim.call_count)
 
@@ -130,6 +145,61 @@ class TraeRewardCreditsTests(unittest.TestCase):
         self.assertEqual(75, credits)
         self.assertTrue(enable)
         self.assertEqual(0, code)
+
+    def test_fresh_checkin_device_ids_are_16_digits(self):
+        values = {CHECKIN.fresh_checkin_device_id() for _ in range(20)}
+        self.assertGreater(len(values), 1)
+        for value in values:
+            self.assertEqual(16, len(value))
+            self.assertTrue(value.isdigit())
+            self.assertNotEqual("0", value[0])
+
+    def test_status_and_claim_send_empty_json_body(self):
+        with patch.object(
+            CHECKIN, "_post", return_value=(200, '{"code":0,"checked_in":false,"enable":true}')
+        ) as post:
+            CHECKIN.status_of("token", "1234567890123456")
+        self.assertEqual("{}", post.call_args.args[2])
+        self.assertEqual("1234567890123456", post.call_args.args[1]["x-device-id"])
+
+        with patch.object(
+            CHECKIN, "_post", return_value=(200, '{"code":0,"data":{"points":10}}')
+        ) as post:
+            CHECKIN.claim("token", "1234567890123456")
+        self.assertEqual("{}", post.call_args.args[2])
+        self.assertEqual("1234567890123456", post.call_args.args[1]["x-device-id"])
+
+    def test_checkin_reuses_one_temporary_device_without_replacing_login_device(self):
+        account = {
+            "accessToken": "token",
+            "deviceId": "login-device",
+            "refreshToken": "refresh",
+            "name": "tester",
+        }
+        with patch.object(CHECKIN, "device_id_for", return_value="login-device"), \
+                patch.object(CHECKIN, "fresh_checkin_device_id", return_value="1234567890123456"), \
+                patch.object(
+                    CHECKIN,
+                    "status_of",
+                    side_effect=[
+                        (False, 0, True, 0, "{}"),
+                        (True, 10, True, 0, "{}"),
+                    ],
+                ) as status, \
+                patch.object(
+                    CHECKIN, "claim_with_retry", return_value=(True, 0, "ok", 10)
+                ) as claim, \
+                patch.object(CHECKIN, "credits_summary", return_value=10):
+            with redirect_stdout(io.StringIO()):
+                result = CHECKIN.checkin_account(account, {})
+
+        self.assertEqual("签到成功", result["status"])
+        self.assertEqual("login-device", account["deviceId"])
+        self.assertEqual(
+            [("token", "1234567890123456"), ("token", "1234567890123456")],
+            [call.args for call in status.call_args_list],
+        )
+        claim.assert_called_once_with(account, {}, "1234567890123456")
 
     def test_report_uses_selected_reward_value(self):
         account = {
